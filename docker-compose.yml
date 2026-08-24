@@ -1,0 +1,73 @@
+services:
+  neo4j:
+    image: neo4j:5.18.0-community
+    container_name: reggraph_neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/reggraph_password
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+    ports:
+      - "7474:7474" # Neo4j Browser
+      - "7687:7687" # Bolt port
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p reggraph_password 'RETURN 1' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reggraph_backend
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=reggraph_password
+      - NEO4J_DATABASE=neo4j
+      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-20b}
+      - GROQ_BASE_URL=${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
+      - GROQ_TPM_LIMIT=${GROQ_TPM_LIMIT:-8000}
+      - GROQ_TPM_SAFETY_MARGIN=${GROQ_TPM_SAFETY_MARGIN:-0.90}
+      - GROQ_MAX_REQUEST_INPUT_TOKENS=${GROQ_MAX_REQUEST_INPUT_TOKENS:-4000}
+      - GROQ_RESERVED_OUTPUT_TOKENS=${GROQ_RESERVED_OUTPUT_TOKENS:-600}
+      - GROQ_MAX_RATE_LIMIT_RETRIES=${GROQ_MAX_RATE_LIMIT_RETRIES:-3}
+      - GROQ_MAX_RETRY_WAIT_SECONDS=${GROQ_MAX_RETRY_WAIT_SECONDS:-60.0}
+      - GROQ_RATE_LIMIT_SAFETY_BUFFER_SECONDS=${GROQ_RATE_LIMIT_SAFETY_BUFFER_SECONDS:-2.0}
+      - FACT_EXTRACTION_BATCH_SIZE=${FACT_EXTRACTION_BATCH_SIZE:-3}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-flash-latest}
+      - GEMINI_TEMPERATURE=${GEMINI_TEMPERATURE:-0.0}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:latest}
+      - OLLAMA_TEMPERATURE=${OLLAMA_TEMPERATURE:-0.0}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - UPLOAD_DIR=/app/uploads
+      - DEBUG=true
+    ports:
+      - "8080:8080"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+  uploads_data:
+    driver: local
