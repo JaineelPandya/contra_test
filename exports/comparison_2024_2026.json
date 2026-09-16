@@ -1,0 +1,675 @@
+[
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "EXCEPTION_ADDED",
+    "old_relation": "Employees/temporary staff/voluntary workers of market intermediaries | PROHIBITS | rumours or unverified information obtained from client, industry, any trade or any other sources without verification",
+    "new_relation": "subscription to the issue of Non-Convertible Securities | PERMITS | during trading window closure period",
+    "source_fact_id": "bd461488-626d-45f3-96ba-80bfbb3c995c",
+    "target_fact_id": "8742f440-dc5d-4629-98ba-82648affcb55",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2024/180",
+    "reason": "Trading window restriction carved out: does not apply in respect of subscription to non-convertible securities by Designated Persons pursuant to Circular dated December 30, 2024.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "subscription to the issue of Non-Convertible Securities",
+      "action": "PERMITS",
+      "object": "SUBSCRIPTION_TO_NCS",
+      "exception": "carve-out from trading window closure restriction"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "Immediate Relatives of Designated Persons | REQUIRES | trading window closure period on account of declaration of financial results",
+    "source_fact_id": "088b1ffb-cdd3-41c8-ba5e-7b2f3cfb8590",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "Automated implementation of trading window closure | EXTENDS | Immediate Relatives of Designated Persons",
+    "source_fact_id": "ab742553-346d-473f-81c9-8b5463cbe361",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "CLARIFICATION",
+    "action": "CLARIFIED",
+    "old_relation": "SEBI registered market intermediaries | REQUIRES | unauthenticated news circulated through various modes of communication",
+    "new_relation": "Access to social media platforms, instant messaging services, VoIP, Blogs, Chat forums, websites, e-mail or any such medium | SUBJECT_TO | controlled supervision",
+    "source_fact_id": "ee3971b8-c9a7-4010-82d8-1bbbfaf7a548",
+    "target_fact_id": "40940e48-30f2-48dd-8587-a26f88c2463f",
+    "source_circular": "Cir/ISD/1/2011",
+    "reason": "Chapter 2 provisions regarding unauthenticated news on social media/blogs remain substantively unchanged. Footnote 3 added citing original Circular Cir/ISD/1/2011.",
+    "confidence": 0.95,
+    "dimensions": {
+      "actor": "Access to social media platforms, instant messaging services, VoIP, Blogs, Chat forums, websites, e-mail or any such medium",
+      "action": "SUBJECT_TO",
+      "object": "controlled supervision"
+    }
+  },
+  {
+    "change_type": "CLARIFICATION",
+    "action": "CLARIFIED",
+    "old_relation": "SEBI registered market intermediaries | REQUIRES | unauthenticated news circulated through various modes of communication",
+    "new_relation": "Access to social media platforms, instant messaging services, VoIP, Blogs, Chat forums, websites, e-mail or any such medium | PERMITS | controlled supervision",
+    "source_fact_id": "ae5f4938-94e9-4e70-8f55-4b8b5c5dfca8",
+    "target_fact_id": "40940e48-30f2-48dd-8587-a26f88c2463f",
+    "source_circular": "Cir/ISD/1/2011",
+    "reason": "Chapter 2 provisions regarding unauthenticated news on social media/blogs remain substantively unchanged. Footnote 3 added citing original Circular Cir/ISD/1/2011.",
+    "confidence": 0.95,
+    "dimensions": {
+      "actor": "Access to social media platforms, instant messaging services, VoIP, Blogs, Chat forums, websites, e-mail or any such medium",
+      "action": "PERMITS",
+      "object": "controlled supervision"
+    }
+  },
+  {
+    "change_type": "CLARIFICATION",
+    "action": "CLARIFIED",
+    "old_relation": "SEBI registered market intermediaries | REQUIRES | unauthenticated news circulated through various modes of communication",
+    "new_relation": "Logs for usage of social media platforms, instant messaging services, VoIP, Blogs, Chat forums, websites, e-mail or any such medium | REQUIRES | records",
+    "source_fact_id": "1398b77b-9fea-46de-856b-9d09104098ec",
+    "target_fact_id": "40940e48-30f2-48dd-8587-a26f88c2463f",
+    "source_circular": "Cir/ISD/1/2011",
+    "reason": "Chapter 2 provisions regarding unauthenticated news on social media/blogs remain substantively unchanged. Footnote 3 added citing original Circular Cir/ISD/1/2011.",
+    "confidence": 0.95,
+    "dimensions": {
+      "actor": "Logs for usage of social media platforms, instant messaging services, VoIP, Blogs, Chat forums, websites, e-mail or any such medium",
+      "action": "REQUIRES",
+      "object": "records"
+    }
+  },
+  {
+    "change_type": "CLARIFICATION",
+    "action": "CLARIFIED",
+    "old_relation": "SEBI registered market intermediaries | REQUIRES | unauthenticated news circulated through various modes of communication",
+    "new_relation": "Logs for usage of social media platforms, instant messaging services, VoIP, Blogs, Chat forums, websites, e-mail or any such medium | REQUIRES | the respective regulations which govern the concerned intermediary",
+    "source_fact_id": "f4fd8f13-aaae-4ddc-b449-fc523c1b0228",
+    "target_fact_id": "40940e48-30f2-48dd-8587-a26f88c2463f",
+    "source_circular": "Cir/ISD/1/2011",
+    "reason": "Chapter 2 provisions regarding unauthenticated news on social media/blogs remain substantively unchanged. Footnote 3 added citing original Circular Cir/ISD/1/2011.",
+    "confidence": 0.95,
+    "dimensions": {
+      "actor": "Logs for usage of social media platforms, instant messaging services, VoIP, Blogs, Chat forums, websites, e-mail or any such medium",
+      "action": "REQUIRES",
+      "object": "the respective regulations which govern the concerned intermediary"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "SEBI | REQUIRES | Financial Disincentive",
+    "source_fact_id": "15e7db64-f03d-47b3-baf6-44dc8433a248",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "SEBI",
+      "action": "REQUIRES",
+      "object": "Financial Disincentive",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "MII | REQUIRES | Investor Protection and Education Fund (SEBI-IPEF)",
+    "source_fact_id": "7b25bdbb-5d2b-4bff-b820-65016e1f1fff",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "within 15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "MII",
+      "action": "REQUIRES",
+      "object": "Investor Protection and Education Fund (SEBI-IPEF)",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "MII | REQUIRES | 15 working days",
+    "source_fact_id": "174fb4d2-d0ca-49d3-b8c4-e7a51d47e9c4",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "within 15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "MII",
+      "action": "REQUIRES",
+      "object": "15 working days",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "MII | REQUIRES | SEBI",
+    "source_fact_id": "1494b2cb-71f5-40e5-a363-7c19b3a8c910",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "MII",
+      "action": "REQUIRES",
+      "object": "SEBI",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "MIIs | REQUIRES | their websites and in their respective annual reports",
+    "source_fact_id": "0d84b054-e295-4eec-982e-b9ed13eb47cf",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "MIIs",
+      "action": "REQUIRES",
+      "object": "their websites and in their respective annual reports",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "Listed MIIs | REFERENCES | Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements) Regulations, 2015",
+    "source_fact_id": "3e462787-e2fb-4454-9036-fb0467e7f726",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "Listed MIIs",
+      "action": "REFERENCES",
+      "object": "Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements) Regulations, 2015",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "Framework of FDSRL | EXCEPTION_TO | have market wide impact",
+    "source_fact_id": "1262a30a-e9b5-42f7-bc56-2ef6e44938d9",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "Framework of FDSRL",
+      "action": "EXCEPTION_TO",
+      "object": "have market wide impact",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "Framework of FDSRL | EXCEPTION_TO | affected the integrity of the market",
+    "source_fact_id": "9d815dc9-65bb-49f2-87ad-ccf38d3cf9f3",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "Framework of FDSRL",
+      "action": "EXCEPTION_TO",
+      "object": "affected the integrity of the market",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "PROCEDURE_CHANGED",
+    "old_relation": "PAYMENT | VIA | DEMAND_DRAFT",
+    "new_relation": "Amounts credited to IPEF | REQUIRES | NEFT/RTGS/IMPS or online payment using SEBI Payment Gateway or other mode specified by Board",
+    "source_fact_id": "37b52ba9-db37-45f6-aacb-2203678f0d06",
+    "target_fact_id": "f9c3dc48-0ce1-426c-bf27-ba24ccf37949",
+    "source_circular": "SEBI/HO/GSD/TAD/P/CIR/2023/149",
+    "reason": "Payment method updated: Demand Draft removed; online payment through Net Banking, NEFT, RTGS, Debit cards, or UPI mandated as per Circular dated September 4, 2023.",
+    "confidence": 0.95,
+    "dimensions": {
+      "procedure": "Digital payment only (Net Banking, NEFT, RTGS, UPI); Demand Draft removed"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "trading window closure period under Clause 4 of Schedule B read with Regulation 9 of PIT Regulations | REQUIRES | DPs and their Immediate Relatives by freezing PAN at security level",
+    "source_fact_id": "22a9531a-a656-451f-9f2b-e830ff1d4045",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "stock exchanges and depositories | REQUIRES | to restrict trading by DPs of listed company and their immediate relatives",
+    "source_fact_id": "bed48e4d-d41b-4072-ad3e-7224b9ded21b",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "The framework for freezing of PAN of DPs and their immediate relatives, at security level (\u2018PAN-ISIN freeze framework\u2019) | REQUIRES | trading window closure due to declaration of financial results of the listed companies",
+    "source_fact_id": "a845f94b-fe9d-4668-bd32-9ca8cc6d105a",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "Companies newly listed on Stock Exchanges | REQUIRES | starting from 1st day of second quarter from the quarter in which the company gets listed",
+    "source_fact_id": "eedeef4c-32e9-4cb4-9faa-8d870aa31920",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "Company listed during April 01 to June 30, 20XX | REQUIRES | by October 01, 20XX",
+    "source_fact_id": "4cc4ccde-4d2e-45a9-8488-21add2506ca2",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "Form A13 | REQUIRES | Regulation 7(1)(b) read with Regulation 6(2) of SEBI (Prohibition of Insider Trading) Regulations, 2015",
+    "source_fact_id": "24803dde-6edb-4ed2-a192-512b3a55b6c2",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "Form B | REQUIRES | Regulation 7(2) read with Regulation 6(2) of SEBI (Prohibition of Insider Trading) Regulations, 2015",
+    "source_fact_id": "45d99c57-eade-4e54-98f9-26215607ca04",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "Disclosures under SEBI (Prohibition of Insider Trading) Regulations, 2015 | REQUIRES | details of securities held on appointment of KMP/Director/Promoter/member of promoter group and immediate relatives",
+    "source_fact_id": "6b4ff4ab-a910-4a71-86b0-8fd8d904afdd",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "Disclosures under SEBI (Prohibition of Insider Trading) Regulations, 2015 | REQUIRES | details of open interest in derivatives on the securities of the company held on appointment of KMP/Director/Promoter/member of promoter group",
+    "source_fact_id": "5434f56d-31da-41ea-b37a-2919bae3ce48",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "Disclosures under SEBI (Prohibition of Insider Trading) Regulations, 2015 | REQUIRES | details of change in holding of securities of Promoter, Member of promoter group, Designated Person or Director and immediate relatives",
+    "source_fact_id": "07762869-7620-4314-906a-1d0455bdab24",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "Regulation 7(1)(b) read with Regulation 6(2) | REQUIRES | disclosure on becoming a Key Managerial Personnel/Director/Promoter/Member of promoter group",
+    "source_fact_id": "d6b861cc-1d52-4453-9538-cc74994a13db",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "Details of trading in derivatives on the securities of the company | REQUIRES | Promoter, member of the promoter group, designated person or Director of a listed company and immediate relatives of such persons and other such persons as mentioned in Regulation 6(2)",
+    "source_fact_id": "b3e7bb2d-2243-4474-b1e1-745dec9f7dc1",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "MII | SUBJECT_TO | FDSRL",
+    "source_fact_id": "05225f01-448b-4fda-b088-af2e09943720",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "MII",
+      "action": "SUBJECT_TO",
+      "object": "FDSRL",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "MII | REQUIRES | FINANCIAL_DISINCENTIVE",
+    "source_fact_id": "b83a5815-05db-4889-9587-1c16469c1437",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "within 15 working days",
+    "threshold": "determined on the basis of total annual revenue of the MII",
+    "dimensions": {
+      "actor": "MII",
+      "action": "REQUIRES",
+      "object": "FINANCIAL_DISINCENTIVE",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "FINANCIAL_DISINCENTIVE | CREDITED_TO | SEBI-IPEF",
+    "source_fact_id": "1c488175-8d95-47a2-944d-20fbc23d2040",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "within 15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "FINANCIAL_DISINCENTIVE",
+      "action": "CREDITED_TO",
+      "object": "SEBI-IPEF",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "FINANCIAL_DISINCENTIVE | PAYMENT_DEADLINE | 15_WORKING_DAYS",
+    "source_fact_id": "5926da14-02c3-472a-9653-202b7180c47a",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "FINANCIAL_DISINCENTIVE",
+      "action": "PAYMENT_DEADLINE",
+      "object": "15_WORKING_DAYS",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "NEW_OBLIGATION",
+    "old_relation": null,
+    "new_relation": "MII | SUBMITS_TO | SEBI",
+    "source_fact_id": "81df910b-6087-41a5-b0e1-6c5b2d29e4b1",
+    "target_fact_id": null,
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-1/P/CIR/2024/73",
+    "reason": "Mandates framework of financial disincentives for Surveillance Related Lapses (FDSRL) at MIIs. Financial disincentives must be credited by the MII within 15 working days to SEBI-IPEF.",
+    "confidence": 1.0,
+    "time": "within 15 working days",
+    "threshold": "total annual revenue",
+    "dimensions": {
+      "actor": "MII",
+      "action": "SUBMITS_TO",
+      "object": "SEBI",
+      "time": "15 working days",
+      "procedure": "credited by MII to SEBI-IPEF with confirmation to SEBI"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "EXCEPTION_ADDED",
+    "old_relation": "Employees/temporary staff/voluntary workers of market intermediaries | PROHIBITS | rumours or unverified information obtained from client, industry, any trade or any other sources without verification",
+    "new_relation": "DESIGNATED_PERSONS | PERMITS | SUBSCRIPTION_TO_NCS",
+    "source_fact_id": "0c88b92a-bd9c-42c8-883b-07ee3be49031",
+    "target_fact_id": "8742f440-dc5d-4629-98ba-82648affcb55",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2024/180",
+    "reason": "Trading window restriction carved out: does not apply in respect of subscription to non-convertible securities by Designated Persons pursuant to Circular dated December 30, 2024.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DESIGNATED_PERSONS",
+      "action": "PERMITS",
+      "object": "SUBSCRIPTION_TO_NCS",
+      "exception": "carve-out from trading window closure restriction"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "DEPOSITORIES | REQUIRES | FREEZE_PAN_ISIN",
+    "source_fact_id": "c6e557d8-8c9c-45af-810a-f4460d26c7b8",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "SCOPE_EXPANDED",
+    "old_relation": "notional trading window | REQUIRES | as an instrument of monitoring the trading by the designated persons",
+    "new_relation": "IMMEDIATE_RELATIVES | SUBJECT_TO | TRADING_WINDOW_RESTRICTION",
+    "source_fact_id": "aab73cb6-ab15-4ca4-b11c-8ac0ccf8ee86",
+    "target_fact_id": "8dab9563-daaa-4f35-b51b-3521d6b34adc",
+    "source_circular": "SEBI/HO/ISD/ISD-PoD-2/P/CIR/2025/55",
+    "reason": "Scope of PAN-ISIN level freeze for trading window closure expanded from Designated Persons (DPs) to include Immediate Relatives of DPs as per Circular dated April 21, 2025.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "DEPOSITORIES",
+      "scope": "DP + Immediate Relatives (expanded from DP only)",
+      "procedure": "Automated PAN-ISIN freeze at depository level"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "REQUIREMENT_REMOVED",
+    "old_relation": "Trading in specified cases (Merger, demerger, etc.) | REQUIRES | Trade for Trade (TFT) segment for first 10 trading days",
+    "new_relation": null,
+    "source_fact_id": null,
+    "target_fact_id": "86e0c123-a713-421d-8736-2510bf73bf75",
+    "source_circular": "CIR/MRD/DP/02/2012",
+    "reason": "Footnote 2 notes that the condition 'while keeping the price band open on the first day of trading' is omitted in line with Circular CIR/MRD/DP/02/2012.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "Trading in specified cases (Merger, demerger, etc.)",
+      "requirement": "Keeping price band open on first day of trading omitted"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "REQUIREMENT_REMOVED",
+    "old_relation": "Trading in specified cases (Merger, demerger, etc.) | EXCEPTION_TO | Original scrips on which derivatives products are available or included in indices on which derivatives products are available",
+    "new_relation": null,
+    "source_fact_id": null,
+    "target_fact_id": "0344f5ac-c70f-46ac-bb76-26cb5678b3db",
+    "source_circular": "CIR/MRD/DP/02/2012",
+    "reason": "Footnote 2 notes that the condition 'while keeping the price band open on the first day of trading' is omitted in line with Circular CIR/MRD/DP/02/2012.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "Trading in specified cases (Merger, demerger, etc.)",
+      "requirement": "Keeping price band open on first day of trading omitted"
+    }
+  },
+  {
+    "change_type": "ACTUAL_CHANGE",
+    "action": "REQUIREMENT_REMOVED",
+    "old_relation": "Trading in specified cases (Merger, demerger, etc.) | REQUIRES | Applicable price band while keeping the price band open on the first day of trading",
+    "new_relation": null,
+    "source_fact_id": null,
+    "target_fact_id": "e117ca8d-a589-43bc-9235-2b05204e4539",
+    "source_circular": "CIR/MRD/DP/02/2012",
+    "reason": "Footnote 2 notes that the condition 'while keeping the price band open on the first day of trading' is omitted in line with Circular CIR/MRD/DP/02/2012.",
+    "confidence": 1.0,
+    "dimensions": {
+      "actor": "Trading in specified cases (Merger, demerger, etc.)",
+      "requirement": "Keeping price band open on first day of trading omitted"
+    }
+  }
+]

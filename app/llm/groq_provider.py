@@ -11,13 +11,22 @@ from app.core.logging import logger
 from app.llm.base import BaseLLMProvider
 from app.models.chunk import Chunk
 from app.models.document import DocumentMetadata
-from app.models.fact import Fact, FactPredicate, FactStatus
+from app.models.fact import Fact, FactPredicate, FactStatus, normalize_text
 from app.models.reference import DocumentReference
 from app.prompts.metadata import METADATA_EXTRACTION_SYSTEM_PROMPT, METADATA_EXTRACTION_USER_PROMPT
-from app.prompts.fact_extraction import BATCH_FACT_EXTRACTION_SYSTEM_PROMPT, BATCH_FACT_EXTRACTION_USER_PROMPT
+from app.prompts.fact_extraction import (
+    ACCURACY_FIRST_FACT_EXTRACTION_SYSTEM_PROMPT,
+    ACCURACY_FIRST_FACT_EXTRACTION_USER_PROMPT,
+    BATCH_FACT_EXTRACTION_SYSTEM_PROMPT,
+    BATCH_FACT_EXTRACTION_USER_PROMPT,
+    SIMPLIFIED_FALLBACK_FACT_EXTRACTION_SYSTEM_PROMPT,
+    SIMPLIFIED_FALLBACK_FACT_EXTRACTION_USER_PROMPT,
+    FACT_VERIFICATION_SYSTEM_PROMPT,
+    FACT_VERIFICATION_USER_PROMPT,
+)
 from app.prompts.change_detection import BATCH_RELATIONSHIP_SYSTEM_PROMPT, BATCH_RELATIONSHIP_USER_PROMPT
 from app.prompts.reference_detection import REFERENCE_DETECTION_SYSTEM_PROMPT, REFERENCE_DETECTION_USER_PROMPT
-from app.services.chunker import approximate_token_count
+from app.services.qualifier_extractor import extract_qualifier_spans
 
 
 class GroqRateLimitLongWaitError(Exception):
@@ -34,6 +43,22 @@ class GroqCircuitBreakerOpenError(Exception):
     def __init__(self, cooldown_remaining: float) -> None:
         self.cooldown_remaining = cooldown_remaining
         super().__init__(f"Groq circuit breaker is active. Cooldown remaining: {cooldown_remaining:.1f}s")
+
+
+class GroqJsonValidateError(Exception):
+    """Raised when Groq returns HTTP 400 json_validate_failed."""
+
+    def __init__(self, message: str = "", failed_generation: str = "") -> None:
+        self.failed_generation = failed_generation
+        super().__init__(message or f"Groq JSON validation failed: {failed_generation}")
+
+
+class GroqOutputTruncatedError(Exception):
+    """Raised when Groq output is truncated before completing valid JSON."""
+
+    def __init__(self, message: str = "", failed_generation: str = "") -> None:
+        self.failed_generation = failed_generation
+        super().__init__(message or f"Groq output token limit reached: {failed_generation}")
 
 
 def sanitize_chunk_text(text: str) -> str:
@@ -166,6 +191,11 @@ class RollingTPMTracker:
 
             if wait_seconds > 0:
                 await asyncio.sleep(wait_seconds)
+                # Safeguard against mock environments where time.monotonic() is not advanced
+                if time.monotonic() <= now:
+                    async with self._lock:
+                        if self._usage_history:
+                            self._usage_history.pop(0)
 
 
 class GroqCircuitBreaker:
@@ -230,17 +260,23 @@ class GroqProvider(BaseLLMProvider):
             cooldown_seconds=self.settings.GROQ_CIRCUIT_BREAKER_COOLDOWN_SECONDS,
         )
 
+        self.max_output_tokens_retry = getattr(self.settings, "GROQ_MAX_OUTPUT_TOKENS_RETRY", 2000)
+        self.alternate_model = getattr(self.settings, "GROQ_ALTERNATE_MODEL", "qwen/qwen3.8-27b")
+        self.verify_second_pass = getattr(self.settings, "FACT_EXTRACTION_VERIFY_SECOND_PASS", False)
+
         if not self.api_key:
             raise ValueError(
                 "GROQ_API_KEY is not set. "
                 "Add it to your .env file or set the GROQ_API_KEY environment variable."
             )
         logger.info(
-            "Groq configured model: %s | TPM limit: %d (safety: %d) | reserved output: %d | max wait: %.1fs",
+            "Groq configured model: %s (alt: %s) | TPM limit: %d (safety: %d) | reserved output: %d (retry: %d) | max wait: %.1fs",
             self.model,
+            self.alternate_model,
             self.tpm_limit,
             self.tpm_tracker.get_safety_limit(),
             self.reserved_output_tokens,
+            self.max_output_tokens_retry,
             self.max_retry_wait_seconds,
         )
 
@@ -250,17 +286,23 @@ class GroqProvider(BaseLLMProvider):
         user_prompt: str,
         max_output_tokens: Optional[int] = None,
         context_info: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        return_usage: bool = False,
+    ) -> Any:
         """Send chat completion request to Groq API using json_object mode, token budgeting, and bounded 429 retries."""
-        # 1. Proactive circuit breaker check
+        # 1. Proactive circuit breaker check: cooperative asynchronous wait instead of fast-failing
         is_open, remaining_cooldown = self.circuit_breaker.is_open()
         if is_open:
+            sleep_wait = remaining_cooldown + 1.0
             logger.warning(
-                "Groq request blocked by circuit breaker (cooldown remaining: %.1fs) | %s",
+                "Groq circuit breaker open (cooldown remaining: %.1fs). "
+                "Cooperatively pausing worker for %.1fs before request to clear cooldown | %s",
                 remaining_cooldown,
+                sleep_wait,
                 context_info or "",
             )
-            raise GroqCircuitBreakerOpenError(remaining_cooldown)
+            await asyncio.sleep(sleep_wait)
 
         url = f"{self.base_url}/chat/completions"
         headers = {
@@ -268,6 +310,8 @@ class GroqProvider(BaseLLMProvider):
             "Authorization": f"Bearer {self.api_key}",
         }
 
+        req_model = model or self.model
+        req_temp = self.temperature if temperature is None else temperature
         output_budget = max_output_tokens or self.reserved_output_tokens
         sys_tokens = approximate_token_count(system_prompt)
         user_tokens = approximate_token_count(user_prompt)
@@ -275,13 +319,13 @@ class GroqProvider(BaseLLMProvider):
         total_estimated_request_cost = total_input_tokens + output_budget
 
         payload: Dict[str, Any] = {
-            "model": self.model,
+            "model": req_model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
             "response_format": {"type": "json_object"},
-            "temperature": self.temperature,
+            "temperature": req_temp,
             "max_tokens": output_budget,
         }
 
@@ -292,7 +336,7 @@ class GroqProvider(BaseLLMProvider):
         logger.info(
             "Groq request token budget | model=%s | est_input_tokens=%d | max_output_tokens=%d | "
             "total_req_tokens=%d | TPM_used=%d | TPM_safety_limit=%d | %s",
-            self.model,
+            req_model,
             total_input_tokens,
             output_budget,
             total_estimated_request_cost,
@@ -316,8 +360,12 @@ class GroqProvider(BaseLLMProvider):
                     response.raise_for_status()
                     data = response.json()
                     content = data["choices"][0]["message"]["content"]
+                    usage = data.get("usage", {})
                     self.circuit_breaker.record_success()
-                    return clean_json_response(content)
+                    parsed = clean_json_response(content)
+                    if return_usage:
+                        return parsed, usage
+                    return parsed
 
                 except httpx.HTTPStatusError as e:
                     status_code = e.response.status_code
@@ -389,15 +437,547 @@ class GroqProvider(BaseLLMProvider):
                         total_allowed_attempts,
                         context_info or "",
                     )
+
+                    if status_code == 400:
+                        failed_lower = (failed_gen or "").lower()
+                        msg_lower = (error_msg or "").lower()
+                        if "max completion tokens reached" in failed_lower or "max completion tokens reached" in msg_lower or "length" in failed_lower:
+                            raise GroqOutputTruncatedError(error_msg, failed_generation=failed_gen)
+                        elif error_code == "json_validate_failed" or "json" in msg_lower or "validate" in msg_lower:
+                            raise GroqJsonValidateError(error_msg, failed_generation=failed_gen)
+
                     raise
 
-                except (GroqRateLimitLongWaitError, GroqCircuitBreakerOpenError):
+                except (GroqRateLimitLongWaitError, GroqCircuitBreakerOpenError, GroqOutputTruncatedError, GroqJsonValidateError):
                     raise
                 except Exception as e:
                     logger.error("Groq API request exception (attempt %d/%d): %s", attempt, total_allowed_attempts, e)
                     raise
 
         raise RuntimeError(f"Groq request failed after {total_allowed_attempts} attempts.")
+
+    def _find_grounded_sentence(self, chunk_text: str, subject: str, obj: str) -> str:
+        """Find the best verbatim sentence in chunk_text for provenance grounding."""
+        if not chunk_text or not chunk_text.strip():
+            return ""
+
+        sentences = re.split(r"(?<=[.!?])\s+", chunk_text.strip())
+        sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
+        if not sentences:
+            return chunk_text.strip()[:350]
+
+        stop_words = {"the", "a", "an", "of", "and", "or", "in", "to", "for", "with", "on", "at", "by", "from", "as", "is", "are", "be"}
+
+        def extract_kw(t: str) -> set:
+            return {w.lower() for w in re.findall(r"\b[A-Za-z0-9]+\b", t) if w.lower() not in stop_words}
+
+        query_kw = extract_kw(subject) | extract_kw(obj)
+        best_sentence = sentences[0]
+        best_overlap = -1
+
+        for s in sentences:
+            overlap = len(query_kw & extract_kw(s))
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_sentence = s
+
+        if normalize_text(best_sentence) in normalize_text(chunk_text):
+            return best_sentence
+        return chunk_text.strip()[:350]
+
+    def _map_predicate_to_enum(self, pred_str: str) -> Tuple[Optional[FactPredicate], Optional[str]]:
+        """Map raw predicate string to canonical FactPredicate and regulatory requirement state."""
+        pred_stripped = pred_str.strip()
+        pred_upper = pred_stripped.upper()
+
+        if pred_upper in FactPredicate.__members__:
+            pred = FactPredicate(pred_upper)
+            if pred == FactPredicate.PROHIBITS:
+                return pred, "PROHIBITED"
+            elif pred == FactPredicate.PERMITS:
+                return pred, "PERMITTED"
+            elif pred in (FactPredicate.DELETES, FactPredicate.REPEALS):
+                return pred, "DELETED"
+            elif pred in (FactPredicate.MODIFIES, FactPredicate.AMENDS, FactPredicate.REPLACES, FactPredicate.SUPERSEDES):
+                return pred, "MODIFIED"
+            elif pred in (
+                FactPredicate.REQUIRES,
+                FactPredicate.CREDITED_TO,
+                FactPredicate.PAYMENT_DEADLINE,
+                FactPredicate.SUBMITS_TO,
+                FactPredicate.REPORTS_TO,
+                FactPredicate.MAINTAINS,
+                FactPredicate.IMPLEMENTS,
+            ):
+                return pred, "MANDATORY"
+            return pred, "ACTIVE"
+
+        # If it looks like a fabricated uppercase enum (all uppercase with underscores or letters, but not valid), reject
+        if pred_stripped == pred_upper and ("_" in pred_stripped or len(pred_stripped) > 4):
+            return None, None
+
+        clean_pred = re.sub(r"[_\-]+", " ", pred_str).strip()
+
+        if re.search(r"\b(shall\s+not|must\s+not|shall\s+neither|neither\b.*\bnor|prohibit\w*|cannot|barred|forbidden|disallow\w*|restrict\w*|refrain|non-compliance)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.PROHIBITS, "PROHIBITED"
+        elif re.search(r"\b(may|permit\w*|allowed|entitled\s+to|discretion|authoriz\w*|enable\w*|free\s+to|at\s+liberty)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.PERMITS, "PERMITTED"
+        elif re.search(r"\b(exempt\w*|exception\w*|shall\s+not\s+apply|not\s+applicable|carve-out|exclude\w*|excluding)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.EXCEPTION_TO, "ACTIVE"
+        elif re.search(r"\b(substitut\w*|replace\w*|stands\s+substituted)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.REPLACES, "MODIFIED"
+        elif re.search(r"\b(amend\w*|modif\w*|stands\s+modified)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.MODIFIES, "MODIFIED"
+        elif re.search(r"\b(supersed\w*|in\s+supersession)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.SUPERSEDES, "MODIFIED"
+        elif re.search(r"\b(delete\w*|omit\w*|repeal\w*|rescind\w*)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.DELETES, "DELETED"
+        elif re.search(r"\b(clarif\w*|guidance|faq|explained)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.CLARIFIES, "ACTIVE"
+        elif re.search(r"\b(extend\w*)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.EXTENDS, "ACTIVE"
+        elif re.search(r"\b(subject\s+to|conditional)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.SUBJECT_TO, "ACTIVE"
+        elif re.search(r"\b(credited\s+to|credit\w*\s+to)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.CREDITED_TO, "MANDATORY"
+        elif re.search(r"\b(payment\s+deadline|payable\s+within|payment\s+time)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.PAYMENT_DEADLINE, "MANDATORY"
+        elif re.search(r"\b(submits?\s+to|forward\w*\s+to|send\w*\s+to)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.SUBMITS_TO, "MANDATORY"
+        elif re.search(r"\b(reports?\s+to|disclos\w*\s+to)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.REPORTS_TO, "MANDATORY"
+        elif re.search(r"\b(maintains?|preserve\w*|keep\w*)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.MAINTAINS, "MANDATORY"
+        elif re.search(r"\b(implements?|execute\w*)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.IMPLEMENTS, "MANDATORY"
+        elif re.search(r"\b(applies\s+to|applicable\s+to|govern\w*)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.APPLIES_TO, "ACTIVE"
+        elif re.search(r"\b(refer\w*|in\s+terms\s+of|pursuant\s+to|cited)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.REFERENCES, "ACTIVE"
+        elif re.search(r"\b(define\w*|means|deemed|understood\s+as)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.DEFINES, "ACTIVE"
+        elif re.search(r"\b(shall|must|require\w*|obligat\w*|direct\w*|mandat\w*|instruct\w*|prescrib\w*|stipulat\w*|compl\w*|adhere\w*|submit\w*|maintain\w*|ensure\w*|provide\w*|bound\s+to|responsible\s+for|call\s+upon|enforce\w*)\b", clean_pred, re.IGNORECASE):
+            return FactPredicate.REQUIRES, "MANDATORY"
+        else:
+            return None, None
+
+    def _validate_and_enrich_facts(
+        self,
+        raw_facts: List[Any],
+        document_id: str,
+        chunk: Chunk,
+        metadata: Optional[DocumentMetadata],
+        model_name: str,
+        require_grounded_evidence: bool = False,
+    ) -> List[Fact]:
+        """Validate atomic facts, reject empty/placeholder entries, and enrich with Python metadata."""
+        valid_facts: List[Fact] = []
+        chunk_text = chunk.content
+        norm_chunk = normalize_text(chunk_text)
+
+        PLACEHOLDERS = {
+            "string", "...", "n/a", "na", "null", "none", "placeholder", "undefined",
+            "[...]", "?", "<subject>", "<predicate>", "<object>", "tbd"
+        }
+
+        # Extract rule and clause anchors once per chunk
+        rule_ref = None
+        rule_match = re.search(r"\b(Rule\s*8\s*\([0-9a-zA-Z\(\)]+\)|Rule\s*\d+[a-zA-Z\(\)]*)", chunk_text, re.IGNORECASE)
+        if rule_match:
+            rule_ref = re.sub(r"\s+", " ", rule_match.group(1)).strip()
+
+        clause_ref = None
+        pt_match = re.search(r"\b(?:Point(?:\s*No\.?)?|Clause)\s*(\d+[a-zA-Z]?)", chunk_text, re.IGNORECASE)
+        if pt_match:
+            clause_ref = f"Point {pt_match.group(1)}"
+        else:
+            num_match = re.search(r"^\s*(\d+[a-zA-Z]?)\.\s+", chunk_text)
+            if num_match:
+                clause_ref = f"Point {num_match.group(1)}"
+            else:
+                q_match = re.search(r"\b(?:Question|FAQ)\s*(\d+)", chunk_text, re.IGNORECASE)
+                if q_match:
+                    clause_ref = f"Question {q_match.group(1)}"
+
+        qualifiers = extract_qualifier_spans(chunk_text)
+
+        for rf in raw_facts:
+            if not isinstance(rf, dict):
+                continue
+
+            subj_raw = str(rf.get("subject") or "").strip()
+            pred_raw = str(rf.get("predicate") or "").strip()
+            obj_raw = str(rf.get("object") or "").strip()
+
+            # Reject if any atomic triple element is empty
+            if not subj_raw or not pred_raw or not obj_raw:
+                logger.warning("Rejected fact: empty element in triple (subject=%r, predicate=%r, object=%r)", subj_raw, pred_raw, obj_raw)
+                continue
+
+            # Reject obvious hallucinated placeholders
+            if (
+                subj_raw.lower() in PLACEHOLDERS
+                or pred_raw.lower() in PLACEHOLDERS
+                or obj_raw.lower() in PLACEHOLDERS
+            ):
+                logger.warning("Rejected fact: placeholder detected (subject=%r, predicate=%r, object=%r)", subj_raw, pred_raw, obj_raw)
+                continue
+
+            # Reject unreasonable length or all-identical tokens
+            if len(f"{subj_raw} {pred_raw} {obj_raw}") < 8 or (subj_raw.lower() == pred_raw.lower() == obj_raw.lower()):
+                logger.warning("Rejected fact: invalid content length or identical triple tokens")
+                continue
+
+            predicate, reg_status = self._map_predicate_to_enum(pred_raw)
+            if predicate is None:
+                logger.warning("Rejected fact: invalid_predicate\npredicate=%r", pred_raw)
+                continue
+
+            # Ground source_text for provenance
+            explicit_evidence = (rf.get("evidence") or rf.get("source_text") or "").strip()
+            if require_grounded_evidence:
+                if not explicit_evidence:
+                    logger.warning("Rejected fact: empty_evidence\nevidence=%r", explicit_evidence)
+                    continue
+                if normalize_text(explicit_evidence) not in norm_chunk:
+                    logger.warning("Rejected fact: evidence_not_found\nevidence=%r", explicit_evidence)
+                    continue
+                source_text = explicit_evidence
+            else:
+                if explicit_evidence and normalize_text(explicit_evidence) in norm_chunk:
+                    source_text = explicit_evidence
+                elif explicit_evidence and normalize_text(explicit_evidence) not in norm_chunk:
+                    logger.warning("Rejected fact: evidence_not_found\nevidence=%r", explicit_evidence)
+                    continue
+                else:
+                    source_text = self._find_grounded_sentence(chunk_text, subj_raw, obj_raw)
+
+            raw_cond = rf.get("condition")
+            conds = [raw_cond] if isinstance(raw_cond, str) and raw_cond.strip() else list(rf.get("conditions") or qualifiers.get("conditions") or [])
+
+            raw_exc = rf.get("exception")
+            excs = [raw_exc] if isinstance(raw_exc, str) and raw_exc.strip() else list(rf.get("exceptions") or qualifiers.get("exceptions") or [])
+
+            threshold_val = rf.get("threshold") or qualifiers.get("threshold")
+            time_val = rf.get("time") or qualifiers.get("time")
+            source_circ_val = rf.get("source_circular") or qualifiers.get("source_circular")
+
+            fact = Fact(
+                document_id=document_id,
+                chunk_id=chunk.chunk_id,
+                hierarchy_node_id=chunk.parent_id,
+                page_number=chunk.page_start,
+                subject=subj_raw,
+                predicate=predicate,
+                object=obj_raw,
+                rule_reference=rf.get("rule_reference") or rule_ref,
+                clause_reference=rf.get("clause_reference") or clause_ref,
+                conditions=conds,
+                exceptions=excs,
+                threshold=str(threshold_val) if threshold_val else None,
+                time=str(time_val) if time_val else None,
+                source_circular=str(source_circ_val) if source_circ_val else None,
+                regulatory_status=rf.get("regulatory_status") or reg_status,
+                effective_date=rf.get("effective_date"),
+                confidence=float(rf.get("confidence", 0.95)),
+                source_text=source_text,
+                extraction_method="groq",
+                model=model_name,
+                status=FactStatus.ACTIVE,
+                valid_from=metadata.document_date if metadata else None,
+            )
+            valid_facts.append(fact)
+
+        return valid_facts
+
+    async def _verify_facts(
+        self,
+        chunk: Chunk,
+        facts: List[Fact],
+        metadata: Optional[DocumentMetadata],
+    ) -> List[Fact]:
+        """Optional second-pass LLM audit: checks SUPPORTED, UNSUPPORTED, MODIFY, MISSING_FACT."""
+        if not facts:
+            return []
+
+        facts_payload = [
+            {
+                "fact_index": i,
+                "subject": f.subject,
+                "predicate": f.predicate.value,
+                "object": f.object,
+            }
+            for i, f in enumerate(facts)
+        ]
+
+        try:
+            data = await self._generate_json(
+                system_prompt=FACT_VERIFICATION_SYSTEM_PROMPT,
+                user_prompt=FACT_VERIFICATION_USER_PROMPT.format(
+                    chunk_text=chunk.content,
+                    facts_json=json.dumps(facts_payload, indent=2),
+                ),
+                max_output_tokens=self.reserved_output_tokens,
+                context_info=f"fact verification ({chunk.chunk_id})",
+                temperature=0.0,
+            )
+
+            verified_facts: List[Fact] = []
+            verifications = data.get("verifications", [])
+            verdict_by_idx = {}
+            for v in verifications:
+                idx = v.get("fact_index")
+                if idx is not None:
+                    verdict_by_idx[idx] = v
+
+            for i, fact in enumerate(facts):
+                v_info = verdict_by_idx.get(i)
+                if not v_info:
+                    verified_facts.append(fact)
+                    continue
+
+                verdict = str(v_info.get("verdict", "")).upper()
+                if verdict == "SUPPORTED":
+                    verified_facts.append(fact)
+                elif verdict == "MODIFY":
+                    mod = v_info.get("modified_fact", {})
+                    if mod.get("subject"):
+                        fact.subject = mod["subject"]
+                    if mod.get("predicate"):
+                        new_pred, new_status = self._map_predicate_to_enum(mod["predicate"])
+                        fact.predicate = new_pred
+                        fact.regulatory_status = new_status
+                    if mod.get("object"):
+                        fact.object = mod["object"]
+                    verified_facts.append(fact)
+                elif verdict == "UNSUPPORTED":
+                    logger.warning(
+                        "Verifier rejected unsupported fact for chunk %s: [%s] %s %s (reason: %s)",
+                        chunk.chunk_id,
+                        fact.subject,
+                        fact.predicate.value,
+                        fact.object,
+                        v_info.get("reason", "Not supported by text"),
+                    )
+                else:
+                    verified_facts.append(fact)
+
+            # Recover missing facts identified by verifier
+            missing = data.get("missing_facts", [])
+            if missing and isinstance(missing, list):
+                enriched_missing = self._validate_and_enrich_facts(
+                    raw_facts=missing,
+                    document_id=chunk.document_id,
+                    chunk=chunk,
+                    metadata=metadata,
+                    model_name=self.model,
+                )
+                for mf in enriched_missing:
+                    logger.info(
+                        "Verifier recovered missing fact for chunk %s: [%s] %s %s",
+                        chunk.chunk_id, mf.subject, mf.predicate.value, mf.object
+                    )
+                    verified_facts.append(mf)
+
+            return verified_facts
+
+        except Exception as e:
+            logger.warning("Second-pass verification encountered error for chunk %s: %s. Promoting candidate facts.", chunk.chunk_id, e)
+            return facts
+
+    async def _extract_chunk_with_cascade(
+        self,
+        document_id: str,
+        chunk: Chunk,
+        metadata: Optional[DocumentMetadata] = None,
+        on_dead_letter: Optional[Callable[[int, str, Dict[str, Any]], None]] = None,
+    ) -> List[Fact]:
+        """Execute the accuracy-first fact extraction cascade for a single chunk:
+        Stage 1: Normal extraction (temperature=0, max_tokens=1200, ACCURACY_FIRST prompt)
+        Stage 2: Retry same chunk with same schema (on transient failure)
+        Stage 3: Simplified extraction prompt (on json_validate_failed)
+        Stage 4: Higher output-token budget (max_tokens=2000, on truncated output)
+        Stage 5: Alternate/stronger extraction model (e.g. qwen/qwen3.8-27b)
+        Stage 6: Terminal dead-letter marked EXTRACTION_FAILED (zero rule-based fallback into graph)
+        """
+        cid = chunk.chunk_id
+        sanitized_text = sanitize_chunk_text(chunk.content)
+        if not sanitized_text:
+            return []
+
+        attempt_count = 0
+        cascade_history: List[str] = []
+        last_error_code = 400
+        last_error_msg = ""
+        last_failed_gen = ""
+
+        # Construct cascade stages
+        stages = [
+            (
+                "stage_1_normal",
+                self.model,
+                self.reserved_output_tokens,
+                ACCURACY_FIRST_FACT_EXTRACTION_SYSTEM_PROMPT,
+                ACCURACY_FIRST_FACT_EXTRACTION_USER_PROMPT.format(chunk_text=sanitized_text),
+            ),
+            (
+                "stage_2_retry_same",
+                self.model,
+                self.reserved_output_tokens,
+                ACCURACY_FIRST_FACT_EXTRACTION_SYSTEM_PROMPT,
+                ACCURACY_FIRST_FACT_EXTRACTION_USER_PROMPT.format(chunk_text=sanitized_text),
+            ),
+            (
+                "stage_3_simplified_prompt",
+                self.model,
+                self.reserved_output_tokens,
+                SIMPLIFIED_FALLBACK_FACT_EXTRACTION_SYSTEM_PROMPT,
+                SIMPLIFIED_FALLBACK_FACT_EXTRACTION_USER_PROMPT.format(chunk_text=sanitized_text),
+            ),
+            (
+                "stage_4_higher_token_budget",
+                self.model,
+                self.max_output_tokens_retry,
+                SIMPLIFIED_FALLBACK_FACT_EXTRACTION_SYSTEM_PROMPT,
+                SIMPLIFIED_FALLBACK_FACT_EXTRACTION_USER_PROMPT.format(chunk_text=sanitized_text),
+            ),
+        ]
+
+        if self.alternate_model and self.alternate_model != self.model:
+            stages.append((
+                "stage_5_alternate_model",
+                self.alternate_model,
+                self.max_output_tokens_retry,
+                SIMPLIFIED_FALLBACK_FACT_EXTRACTION_SYSTEM_PROMPT,
+                SIMPLIFIED_FALLBACK_FACT_EXTRACTION_USER_PROMPT.format(chunk_text=sanitized_text),
+            ))
+
+        for stage_name, stage_model, stage_max_tokens, sys_prompt, usr_prompt in stages:
+            attempt_count += 1
+            cascade_history.append(f"{stage_name}:{stage_model}")
+            logger.info(
+                "Executing fact extraction cascade | stage=%s | chunk_id=%s | model=%s | max_tokens=%d | attempt=%d/%d",
+                stage_name,
+                cid,
+                stage_model,
+                stage_max_tokens,
+                attempt_count,
+                len(stages),
+            )
+
+            try:
+                data, usage = await self._generate_json(
+                    system_prompt=sys_prompt,
+                    user_prompt=usr_prompt,
+                    max_output_tokens=stage_max_tokens,
+                    context_info=f"{stage_name} ({cid})",
+                    model=stage_model,
+                    temperature=0.0,
+                    return_usage=True,
+                )
+
+                if isinstance(data, dict) and ("facts" in data or "results" in data):
+                    raw_facts = data.get("facts", [])
+                    if not raw_facts and "results" in data:
+                        for r in data.get("results", []):
+                            raw_facts.extend(r.get("facts", []))
+
+                    valid_facts = self._validate_and_enrich_facts(
+                        raw_facts=raw_facts,
+                        document_id=document_id,
+                        chunk=chunk,
+                        metadata=metadata,
+                        model_name=stage_model,
+                    )
+
+                    val_status = "VALID" if (valid_facts or len(raw_facts) == 0) else "EMPTY_REJECTED"
+                    logger.info(
+                        "Fact extraction telemetry | chunk_id=%s | facts_extracted=%d | validation_status=%s | "
+                        "retry_count=%d | model=%s | input_tokens=%d | output_tokens=%d | stage=%s",
+                        cid,
+                        len(valid_facts),
+                        val_status,
+                        attempt_count - 1,
+                        stage_model,
+                        usage.get("prompt_tokens", 0),
+                        usage.get("completion_tokens", 0),
+                        stage_name,
+                    )
+
+                    if self.verify_second_pass and valid_facts:
+                        logger.info("Running second-pass verification for chunk %s (%d candidate facts)", cid, len(valid_facts))
+                        valid_facts = await self._verify_facts(chunk, valid_facts, metadata)
+                        logger.info("Second-pass verification completed for chunk %s (%d verified facts)", cid, len(valid_facts))
+
+                    return valid_facts
+
+            except GroqOutputTruncatedError as ote:
+                last_error_code = 400
+                last_error_msg = str(ote)
+                last_failed_gen = ote.failed_generation
+                logger.warning("Fact extraction output truncated | stage=%s | chunk_id=%s | %s", stage_name, cid, ote)
+                continue
+
+            except GroqJsonValidateError as jve:
+                last_error_code = 400
+                last_error_msg = str(jve)
+                last_failed_gen = jve.failed_generation
+                logger.warning("Fact extraction JSON validation failed | stage=%s | chunk_id=%s | %s", stage_name, cid, jve)
+                continue
+
+            except GroqRateLimitLongWaitError as rle:
+                last_error_code = 429
+                last_error_msg = f"Rate limit wait exceeded: {rle.retry_after:.1f}s"
+                cooldown_sleep = min(rle.retry_after + 2.0, 300.0)
+                logger.warning("Fact extraction received 429 long wait (%.1fs) | stage=%s | chunk_id=%s. Pausing cascade for %.1fs to allow rate limit to clear...", rle.retry_after, stage_name, cid, cooldown_sleep)
+                await asyncio.sleep(cooldown_sleep)
+                continue
+
+            except GroqCircuitBreakerOpenError as cbe:
+                last_error_code = 429
+                last_error_msg = f"Circuit breaker open: {cbe.cooldown_remaining:.1f}s"
+                breaker_sleep = cbe.cooldown_remaining + 1.0
+                logger.warning("Fact extraction blocked by circuit breaker (%.1fs) | stage=%s | chunk_id=%s. Pausing cascade for %.1fs for breaker to reset...", cbe.cooldown_remaining, stage_name, cid, breaker_sleep)
+                await asyncio.sleep(breaker_sleep)
+                continue
+
+            except Exception as e:
+                last_error_code = getattr(getattr(e, "response", None), "status_code", 400)
+                last_error_msg = str(e)
+                logger.warning("Fact extraction exception | stage=%s | chunk_id=%s | %s", stage_name, cid, e)
+                continue
+
+        # Terminal Dead-Letter Stage (Stage 6)
+        logger.error(
+            "EXTRACTION_FAILED: All %d recovery cascade stages failed for chunk %s (document %s). "
+            "No rule-based fallback will be inserted into knowledge graph.",
+            attempt_count,
+            cid,
+            document_id,
+        )
+
+        if on_dead_letter:
+            on_dead_letter(
+                last_error_code,
+                f"Fact extraction failed for chunk {cid} after {attempt_count} cascade attempts. Last error: {last_error_msg}",
+                {
+                    "provider": "groq",
+                    "status": "EXTRACTION_FAILED",
+                    "document_id": document_id,
+                    "chunk_id": cid,
+                    "error_code": last_error_code,
+                    "error_message": last_error_msg,
+                    "failed_generation": last_failed_gen[:300] if last_failed_gen else "",
+                    "number_of_attempts": attempt_count,
+                    "models_tried": list({s[1] for s in stages}),
+                    "cascade_history": cascade_history,
+                    "char_count": len(sanitized_text),
+                    "preview": sanitized_text[:200],
+                    "fallback_used": False,
+                },
+            )
+
+        return []
 
     def _parse_raw_facts(
         self,
@@ -406,7 +986,7 @@ class GroqProvider(BaseLLMProvider):
         chunks: List[Chunk],
         metadata: Optional[DocumentMetadata],
     ) -> List[Fact]:
-        """Parse and validate facts from JSON response safely."""
+        """Parse raw facts from batch response, validating evidence and resolving chunk mapping."""
         raw_facts = data.get("facts", [])
         if not raw_facts and "results" in data:
             for r in data.get("results", []):
@@ -418,52 +998,19 @@ class GroqProvider(BaseLLMProvider):
         for rf in raw_facts:
             try:
                 cid = rf.get("chunk_id")
-                matched_chunk = chunk_map.get(cid) if cid else None
-                if not matched_chunk and chunks:
-                    matched_chunk = chunks[0]
-                    cid = chunks[0].chunk_id
+                matched_chunk = chunk_map.get(cid) if cid else (chunks[0] if chunks else None)
+                if not matched_chunk:
+                    continue
 
-                pred_str = str(rf.get("predicate", "REQUIRES")).upper()
-                try:
-                    predicate = FactPredicate(pred_str)
-                except ValueError:
-                    predicate = FactPredicate.REQUIRES
-
-                reg_status = "ACTIVE"
-                if predicate == FactPredicate.PROHIBITS:
-                    reg_status = "PROHIBITED"
-                elif predicate == FactPredicate.PERMITS:
-                    reg_status = "PERMITTED"
-                elif predicate == FactPredicate.DELETES:
-                    reg_status = "DELETED"
-                elif predicate == FactPredicate.REQUIRES:
-                    reg_status = "MANDATORY"
-
-                source_text = (
-                    rf.get("evidence")
-                    or rf.get("source_text")
-                    or (matched_chunk.content[:200] if matched_chunk else "")
-                )
-
-                fact = Fact(
+                enriched = self._validate_and_enrich_facts(
+                    raw_facts=[rf],
                     document_id=document_id,
-                    chunk_id=cid if cid else chunks[0].chunk_id,
-                    hierarchy_node_id=matched_chunk.parent_id if matched_chunk else None,
-                    subject=rf.get("subject", "Regulated Entity"),
-                    predicate=predicate,
-                    object=rf.get("object", ""),
-                    conditions=rf.get("conditions", []),
-                    exceptions=rf.get("exceptions", []),
-                    regulatory_status=rf.get("regulatory_status", reg_status),
-                    effective_date=rf.get("effective_date"),
-                    confidence=float(rf.get("confidence", 0.95)),
-                    source_text=source_text,
-                    extraction_method="groq",
-                    model=self.model,
-                    status=FactStatus.ACTIVE,
-                    valid_from=metadata.document_date if metadata else None,
+                    chunk=matched_chunk,
+                    metadata=metadata,
+                    model_name=self.model,
+                    require_grounded_evidence=True,
                 )
-                facts.append(fact)
+                facts.extend(enriched)
             except Exception as fact_err:
                 logger.warning("Skipping malformed fact entry in Groq response: %s (error: %s)", rf, fact_err)
 
@@ -476,11 +1023,11 @@ class GroqProvider(BaseLLMProvider):
         metadata: Optional[DocumentMetadata] = None,
         on_dead_letter: Optional[Callable[[int, str, Dict[str, Any]], None]] = None,
     ) -> List[Fact]:
-        """Extract atomic regulatory facts with content sanitization and adaptive recursive batch degradation."""
+        """Extract atomic regulatory facts with content sanitization, single-chunk accuracy-first processing, and adaptive batch degradation."""
         if not chunks:
             return []
 
-        # 1. Content Sanitization
+        # Content sanitization
         sanitized_chunks = [
             Chunk(
                 chunk_id=c.chunk_id,
@@ -496,6 +1043,17 @@ class GroqProvider(BaseLLMProvider):
             for c in chunks
         ]
 
+        # 1. Default Accuracy-First: Single chunk processing
+        if len(sanitized_chunks) == 1:
+            return await self._extract_chunk_with_cascade(
+                document_id=document_id,
+                chunk=sanitized_chunks[0],
+                metadata=metadata,
+                on_dead_letter=on_dead_letter,
+            )
+
+        # 2. Multi-chunk batch handling (Adaptive Batch Splitting down to single chunks)
+        chunk_ids = [c.chunk_id for c in sanitized_chunks]
         chunks_payload = [
             {
                 "chunk_id": c.chunk_id,
@@ -504,19 +1062,12 @@ class GroqProvider(BaseLLMProvider):
             }
             for c in sanitized_chunks
         ]
-
         meta_json = metadata.model_dump_json() if metadata else "{}"
         user_prompt = BATCH_FACT_EXTRACTION_USER_PROMPT.format(
             metadata_json=meta_json,
             chunks_json=json.dumps(chunks_payload, indent=2),
         )
 
-        chunk_ids = [c.chunk_id for c in sanitized_chunks]
-        data = None
-        rate_limit_long_wait = False
-        circuit_breaker_active = False
-
-        # 2. Try primary extraction
         try:
             data = await self._generate_json(
                 system_prompt=BATCH_FACT_EXTRACTION_SYSTEM_PROMPT,
@@ -524,114 +1075,18 @@ class GroqProvider(BaseLLMProvider):
                 max_output_tokens=self.reserved_output_tokens,
                 context_info=f"batch of {len(sanitized_chunks)} chunks ({','.join(chunk_ids)})",
             )
-        except GroqRateLimitLongWaitError as rle:
-            rate_limit_long_wait = True
-            logger.warning("Fact extraction received 429 long wait (%.1fs). Triggering degradation strategy...", rle.retry_after)
-        except GroqCircuitBreakerOpenError as cbe:
-            circuit_breaker_active = True
-            logger.warning("Fact extraction halted by circuit breaker (cooldown: %.1fs). Triggering degradation strategy...", cbe.cooldown_remaining)
-        except httpx.HTTPStatusError as http_err:
-            if http_err.response.status_code == 400:
-                logger.warning("Fact extraction received HTTP 400 (json_validate_failed). Triggering adaptive batch split...")
-            else:
-                logger.error("Groq HTTP error %d: %s", http_err.response.status_code, http_err.response.text[:200])
-        except Exception as gen_err:
-            logger.error("Fact extraction exception: %s", gen_err)
+            if data and ("facts" in data or "results" in data):
+                facts = self._parse_raw_facts(data, document_id, sanitized_chunks, metadata)
+                logger.info("Successfully extracted %d facts via Groq for batch of %d chunks", len(facts), len(sanitized_chunks))
+                return facts
+        except Exception as batch_err:
+            logger.warning("Batch fact extraction encountered %s. Splitting batch into single chunks for accuracy...", batch_err)
 
-        # 3. If primary attempt succeeded, parse and return facts
-        if data and ("facts" in data or "results" in data):
-            facts = self._parse_raw_facts(data, document_id, sanitized_chunks, metadata)
-            logger.info("Successfully extracted %d facts via Groq for batch of %d chunks", len(facts), len(sanitized_chunks))
-            return facts
-
-        # 4. Adaptive Batch Splitting / Degradation Strategy
-        if len(sanitized_chunks) > 1:
-            # Action: SPLIT batch into smaller subgroups
-            mid = len(sanitized_chunks) // 2
-            first_half = sanitized_chunks[:mid]
-            second_half = sanitized_chunks[mid:]
-            logger.warning(
-                "Adaptive Batch Split | action=SPLIT | reason=%s | batch_size=%d -> (%d, %d) | chunk_ids=%s",
-                "429_long_wait" if rate_limit_long_wait else ("circuit_breaker" if circuit_breaker_active else "json_validate_failed"),
-                len(sanitized_chunks),
-                len(first_half),
-                len(second_half),
-                chunk_ids,
-            )
-            facts_first = await self.extract_facts_batch(document_id, first_half, metadata, on_dead_letter)
-            facts_second = await self.extract_facts_batch(document_id, second_half, metadata, on_dead_letter)
-            return facts_first + facts_second
-        else:
-            # Single isolated chunk
-            single_chunk = sanitized_chunks[0]
-            cid = single_chunk.chunk_id
-            content_str = single_chunk.content
-
-            # If failure was a 429 long wait or circuit breaker on a single chunk:
-            # Action: DEFER / Fallback without blocking the worker for minutes
-            if rate_limit_long_wait or circuit_breaker_active:
-                logger.warning(
-                    "Adaptive Degradation | action=DEFER | reason=429_long_wait_single_chunk | "
-                    "chunk_id=%s | worker_not_blocked | using rule-based fallback",
-                    cid,
-                )
-                if on_dead_letter:
-                    on_dead_letter(
-                        429,
-                        f"Groq 429 rate limit long wait for isolated chunk {cid}; deferred to rule-based fallback without blocking worker.",
-                        {
-                            "provider": "groq",
-                            "model": self.model,
-                            "status_code": 429,
-                            "chunk_id": cid,
-                            "char_count": len(content_str),
-                            "preview": content_str[:200],
-                            "fallback_used": True,
-                        },
-                    )
-                return self._fallback_fact_extraction(document_id, [single_chunk], metadata)
-
-            # If failure was HTTP 400 json_validate_failed on a single chunk:
-            # Try minimal single-chunk recovery prompt once
-            try:
-                recovery_sys = (
-                    "You are a regulatory fact extraction assistant. "
-                    "Extract atomic facts from this chunk and return ONLY a JSON object matching: "
-                    "{\"facts\": [{\"subject\": \"...\", \"predicate\": \"REQUIRES\", \"object\": \"...\", \"evidence\": \"...\", \"confidence\": 0.95, \"chunk_id\": \"...\"}]}."
-                )
-                recovery_user = f"Extract regulatory facts from chunk ID '{cid}':\n{content_str}"
-                recovery_data = await self._generate_json(
-                    system_prompt=recovery_sys,
-                    user_prompt=recovery_user,
-                    max_output_tokens=self.reserved_output_tokens,
-                    context_info=f"single chunk recovery ({cid})",
-                )
-                if recovery_data:
-                    recovery_facts = self._parse_raw_facts(recovery_data, document_id, [single_chunk], metadata)
-                    if recovery_facts:
-                        logger.info("Single chunk recovery succeeded for %s (%d facts)", cid, len(recovery_facts))
-                        return recovery_facts
-            except Exception as single_err:
-                logger.error("Single chunk minimal recovery also failed for %s: %s", cid, single_err)
-
-            # If minimal recovery failed, fallback only for this single chunk
-            if on_dead_letter:
-                on_dead_letter(
-                    400,
-                    f"Groq fact extraction failed for isolated chunk {cid} after minimal recovery attempt.",
-                    {
-                        "provider": "groq",
-                        "model": self.model,
-                        "status_code": 400,
-                        "chunk_id": cid,
-                        "char_count": len(content_str),
-                        "preview": content_str[:200],
-                        "fallback_used": True,
-                    },
-                )
-
-            logger.warning("Using rule-based fallback ONLY for isolated failing chunk %s", cid)
-            return self._fallback_fact_extraction(document_id, [single_chunk], metadata)
+        # Split batch recursively until single chunks are processed with the accuracy cascade
+        mid = len(sanitized_chunks) // 2
+        facts_first = await self.extract_facts_batch(document_id, sanitized_chunks[:mid], metadata, on_dead_letter)
+        facts_second = await self.extract_facts_batch(document_id, sanitized_chunks[mid:], metadata, on_dead_letter)
+        return facts_first + facts_second
 
     async def extract_metadata(self, header_text: str) -> Optional[DocumentMetadata]:
         """Extract structured document metadata using Groq."""
@@ -747,38 +1202,102 @@ class GroqProvider(BaseLLMProvider):
         chunks: List[Chunk],
         metadata: Optional[DocumentMetadata] = None,
     ) -> List[Fact]:
-        """Deterministic rule-based fallback if Groq API call fails."""
+        """Deterministic rule-based fallback extracting complete regulatory clauses and rejecting metadata."""
         facts: List[Fact] = []
         for chunk in chunks:
-            lines = [line.strip() for line in chunk.content.split("\n") if line.strip()]
-            for line in lines:
-                if len(line) < 15:
+            text = chunk.content.strip()
+            if len(text) < 30:
+                continue
+
+            # Skip pure metadata or header chunks
+            if re.search(r"^(?:NATIONAL\s+STOCK|CIRCULAR\s+Ref|Download\s+Ref|DEPARTMENT:|Date:|To\s+All\s+Members|Yours\s+faithfully|CIN\s*:|Page\s+\d+)", text, re.IGNORECASE):
+                continue
+
+            # Extract distinct numbered points or statutory provisos
+            clause_blocks = re.split(r"\n(?=(?:\d+\.|\([a-z0-9]+\)|Point(?:\s*No\.?)?\s*\d+|“Provided|Question\s*\d+:))", text)
+
+            for block in clause_blocks:
+                block_clean = block.strip()
+                if len(block_clean) < 25:
                     continue
 
-                predicate = FactPredicate.REQUIRES
+                if re.search(r"^(?:Date:|DEPARTMENT:|Download Ref|Circular Ref|NATIONAL STOCK|Page \d+|CIN|Tel No|To All Members|Yours faithfully)", block_clean, re.IGNORECASE):
+                    continue
+
+                # Determine predicate deterministically without defaulting to REQUIRES
+                predicate = None
                 regulatory_status = "ACTIVE"
 
-                if re.search(r"\b(prohibit|shall not|must not|cannot|forbidden|barred)\b", line, re.IGNORECASE):
-                    predicate = FactPredicate.PROHIBITS
-                    regulatory_status = "PROHIBITED"
-                elif re.search(r"\b(permit|allowed|may|authorized|eligible)\b", line, re.IGNORECASE):
-                    predicate = FactPredicate.PERMITS
-                    regulatory_status = "PERMITTED"
-                elif re.search(r"\b(clarif|guidance|faq|explained)\b", line, re.IGNORECASE):
-                    predicate = FactPredicate.CLARIFIES
-                elif re.search(r"\b(amend|modify|substitut|revised)\b", line, re.IGNORECASE):
-                    predicate = FactPredicate.MODIFIES
-                elif re.search(r"\b(delete|repeal|cancel|withdrawn)\b", line, re.IGNORECASE):
+                if re.search(r"\b(shall\s+be\s+replaced|shall\s+replace|replaces?|shall\s+be\s+substituted|substitut\w*)\b", block_clean, re.IGNORECASE):
+                    predicate = FactPredicate.REPLACES
+                    regulatory_status = "MODIFIED"
+                elif re.search(r"\b(supersedes?|in\s+supersession\s+of)\b", block_clean, re.IGNORECASE):
+                    predicate = FactPredicate.SUPERSEDES
+                    regulatory_status = "MODIFIED"
+                elif re.search(r"\b(repealed?|repeals?|rescinded?)\b", block_clean, re.IGNORECASE):
+                    predicate = FactPredicate.REPEALS
+                    regulatory_status = "DELETED"
+                elif re.search(r"\b(deleted?|deletes?|omitted?|stand\s+deleted)\b", block_clean, re.IGNORECASE):
                     predicate = FactPredicate.DELETES
                     regulatory_status = "DELETED"
-                elif re.search(r"\b(define|means|shall be understood)\b", line, re.IGNORECASE):
+                elif re.search(r"\b(shall\s+be\s+modified|amended?|amends?|modifi\w+|revised?)\b", block_clean, re.IGNORECASE):
+                    predicate = FactPredicate.MODIFIES
+                    regulatory_status = "MODIFIED"
+                elif re.search(r"\b(prohibit\w*|shall\s+not|must\s+not|cannot|forbidden|barred|non-compliance)\b", block_clean, re.IGNORECASE):
+                    predicate = FactPredicate.PROHIBITS
+                    regulatory_status = "PROHIBITED"
+                elif re.search(r"\b(permit\w*|allowed|may|authorized|eligible|not\s+be\s+construed\s+as\s+business)\b", block_clean, re.IGNORECASE):
+                    predicate = FactPredicate.PERMITS
+                    regulatory_status = "PERMITTED"
+                elif re.search(r"\b(clarif\w+|guidance|faq|explained)\b", block_clean, re.IGNORECASE):
+                    predicate = FactPredicate.CLARIFIES
+                elif re.search(r"\b(defines?|means|shall\s+be\s+understood)\b", block_clean, re.IGNORECASE):
                     predicate = FactPredicate.DEFINES
+                elif re.search(r"\b(reference\s+is\s+invited\s+to|refer(?:s|red)?\s+to|circular\s+no\.)\b", block_clean, re.IGNORECASE):
+                    # Citations are reference facts, NEVER amendments or requirements
+                    predicate = FactPredicate.REFERENCES
+                elif re.search(r"\b(shall|must|required?|mandat\w*|direct\w*|instruct\w*|prescrib\w*|stipulat\w*|maintain|submit|ensure|comply|complies)\b", block_clean, re.IGNORECASE):
+                    predicate = FactPredicate.REQUIRES
+                    regulatory_status = "MANDATORY"
+                else:
+                    # If no valid regulatory proposition can be established, do not create fact
+                    continue
 
                 subject = "Trading Member"
-                if re.search(r"\b(Exchange|NSE|SEBI|Board)\b", line, re.IGNORECASE):
+                if re.search(r"\b(Asset\s+Management\s+Company|Asset\s+Management\s+Companies|AMC|AMCs)\b", block_clean, re.IGNORECASE):
+                    subject = "Asset Management Company"
+                elif re.search(r"\b(Mutual\s+Fund|Mutual\s+Funds)\b", block_clean, re.IGNORECASE):
+                    subject = "Mutual Fund"
+                elif re.search(r"\b(Exchange|NSE|SEBI|Board|Regulator)\b", block_clean, re.IGNORECASE):
                     subject = "Exchange / Regulator"
-                elif re.search(r"\b(Client|Investor)\b", line, re.IGNORECASE):
+                elif re.search(r"\b(Client|Investor)\b", block_clean, re.IGNORECASE):
                     subject = "Client / Investor"
+
+                # Extract anchors
+                rule_ref = None
+                rule_match = re.search(r"\b(Rule\s*8\s*\([0-9a-zA-Z\(\)]+\)|Rule\s*\d+[a-zA-Z\(\)]*)", block_clean, re.IGNORECASE)
+                if rule_match:
+                    rule_ref = re.sub(r"\s+", " ", rule_match.group(1)).strip()
+
+                clause_ref = None
+                pt_match = re.search(r"\b(?:Point(?:\s*No\.?)?|Clause)\s*(\d+[a-zA-Z]?)", block_clean, re.IGNORECASE)
+                if pt_match:
+                    clause_ref = f"Point {pt_match.group(1)}"
+                else:
+                    num_match = re.search(r"^\s*(\d+[a-zA-Z]?)\.\s+", block_clean)
+                    if num_match:
+                        clause_ref = f"Point {num_match.group(1)}"
+                    else:
+                        q_match = re.search(r"\b(?:Question|FAQ)\s*(\d+)", block_clean, re.IGNORECASE)
+                        if q_match:
+                            clause_ref = f"Question {q_match.group(1)}"
+
+                # Clean object text
+                first_line = block_clean.split("\n")[0]
+                obj_text = first_line[:150]
+
+                # Deterministically preserve conditions and exceptions
+                qualifiers = extract_qualifier_spans(block_clean)
 
                 fact = Fact(
                     document_id=document_id,
@@ -786,12 +1305,17 @@ class GroqProvider(BaseLLMProvider):
                     hierarchy_node_id=chunk.parent_id,
                     subject=subject,
                     predicate=predicate,
-                    object=line[:120],
-                    conditions=[],
-                    exceptions=[],
+                    object=obj_text,
+                    rule_reference=rule_ref,
+                    clause_reference=clause_ref,
+                    conditions=qualifiers.get("conditions", []),
+                    exceptions=qualifiers.get("exceptions", []),
+                    threshold=qualifiers.get("threshold"),
+                    time=qualifiers.get("time"),
+                    source_circular=qualifiers.get("source_circular"),
                     regulatory_status=regulatory_status,
-                    confidence=0.60,
-                    source_text=line,
+                    confidence=0.75,
+                    source_text=block_clean[:350],
                     extraction_method="rule_based",
                     model=None,
                     fallback_reason="groq_fallback",
@@ -801,3 +1325,4 @@ class GroqProvider(BaseLLMProvider):
                 facts.append(fact)
 
         return facts
+

@@ -107,11 +107,12 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 raw_facts = res.get("facts", [])
 
                 for rf in raw_facts:
-                    pred_str = str(rf.get("predicate", "REQUIRES")).upper()
+                    pred_str = str(rf.get("predicate", "")).strip().upper()
                     try:
                         predicate = FactPredicate(pred_str)
                     except ValueError:
-                        predicate = FactPredicate.REQUIRES
+                        logger.warning("Rejected fact: invalid_predicate chunk_id=%s predicate=%r", cid, pred_str)
+                        continue
 
                     fact = Fact(
                         document_id=document_id,

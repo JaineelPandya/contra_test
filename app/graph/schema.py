@@ -27,7 +27,7 @@ INDEXES = [
 
 
 def initialize_schema(client: Neo4jClient) -> None:
-    """Apply Neo4j constraints and indexes at startup."""
+    """Apply Neo4j constraints, indexes, and schema integrity migrations at startup."""
     logger.info("Initializing Neo4j schema constraints and indexes...")
     for name, cypher in CONSTRAINTS:
         try:
@@ -43,4 +43,73 @@ def initialize_schema(client: Neo4jClient) -> None:
         except Exception as e:
             logger.warning("Failed to apply index %s: %s", name, e)
 
-    logger.info("Neo4j schema initialization complete.")
+    # Schema integrity & bidirectional relationship backfills for existing graphs
+    migrations = [
+        # 1. Backfill SUPPORTED_BY from CONTAINS_FACT
+        (
+            "backfill_supported_by",
+            "MATCH (c:Chunk)-[:CONTAINS_FACT]->(f:Fact) MERGE (f)-[:SUPPORTED_BY]->(c)",
+        ),
+        # 2. Backfill Chunk.path from Chunk.heading_path
+        (
+            "backfill_chunk_path",
+            """
+            MATCH (c:Chunk)
+            WHERE c.path IS NULL OR c.path = ''
+            SET c.path = CASE
+                WHEN c.heading_path IS NOT NULL AND size(c.heading_path) > 0
+                THEN reduce(s = '', x in c.heading_path | CASE WHEN s = '' THEN x ELSE s + ' > ' + x END)
+                ELSE 'Section'
+            END
+            """,
+        ),
+        # 3. Canonicalize any passive verb fact relationships to active verbs
+        (
+            "canonicalize_fact_modifies",
+            "MATCH (f1:Fact)-[r:MODIFIED]->(f2:Fact) MERGE (f1)-[:MODIFIES]->(f2)",
+        ),
+        (
+            "canonicalize_fact_supersedes",
+            "MATCH (f1:Fact)-[r:SUPERSEDED]->(f2:Fact) MERGE (f1)-[:SUPERSEDES]->(f2)",
+        ),
+        (
+            "canonicalize_fact_clarifies",
+            "MATCH (f1:Fact)-[r:CLARIFIED]->(f2:Fact) MERGE (f1)-[:CLARIFIES]->(f2)",
+        ),
+        (
+            "canonicalize_fact_deletes",
+            "MATCH (f1:Fact)-[r:DELETED]->(f2:Fact) MERGE (f1)-[:DELETES]->(f2)",
+        ),
+        # 4. Purge junk metadata facts
+        (
+            "purge_metadata_facts",
+            """
+            MATCH (f:Fact)
+            WHERE f.source_text =~ '(?i)^(Date:|DEPARTMENT:|Download Ref|Circular Ref|NATIONAL STOCK|Page \\\\d+|CIN|Tel No|To All Members|Yours faithfully|Regd\\\\.? Office|CIRCULAR Ref).*'
+               OR (f.object IS NOT NULL AND f.object =~ '(?i)^(Date:|DEPARTMENT:|Download Ref|Circular Ref|NATIONAL STOCK|Page \\\\d+|CIN|Tel No|To All Members|Yours faithfully).*')
+            DETACH DELETE f
+            """,
+        ),
+        # 5. Purge false Cartesian AMENDS relationships that link unrelated facts or lack evidence
+        (
+            "purge_false_amends_edges",
+            """
+            MATCH (f1:Fact)-[r:MODIFIES|SUPERSEDES|CLARIFIES|AMENDS]->(f2:Fact)
+            WHERE (f1.document_id = f2.document_id)
+               OR (f1.source_text =~ '(?i)^(Date:|DEPARTMENT:|Download Ref|Circular Ref|NATIONAL STOCK|Page \\\\d+).*')
+               OR (f2.source_text =~ '(?i)^(Date:|DEPARTMENT:|Download Ref|Circular Ref|NATIONAL STOCK|Page \\\\d+).*')
+            DELETE r
+            """,
+        ),
+    ]
+
+    for mig_name, mig_cypher in migrations:
+        try:
+            client.execute_query(mig_cypher)
+            logger.debug("Applied schema migration: %s", mig_name)
+        except Exception as mig_err:
+            logger.warning("Schema migration %s failed: %s", mig_name, mig_err)
+
+    logger.info("Neo4j schema initialization and integrity migrations complete.")
+
+

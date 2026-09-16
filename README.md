@@ -113,6 +113,10 @@ Services exposed:
 
 | Method | Endpoint | Description |
 |---|---|---|
+| `GET` | `/dashboard` | **Interactive Visual Dashboard** (Q&A, Cytoscape Evolution Graph, PDF Uploader) |
+| `POST` | `/api/query` | Execute Natural Language Query (returns Current Rule + Change Delta + Subgraph) |
+| `POST` | `/api/query/plan` | Preview Query Archetype Plan & Generated Read-Only Cypher Query |
+| `GET` | `/api/query/archetypes` | List supported query archetypes and demo sample queries |
 | `POST` | `/api/documents/upload` | Upload PDF and start async graph pipeline |
 | `GET` | `/api/documents/{document_id}/status` | Check processing stage and extracted counts |
 | `GET` | `/api/documents` | List all processed documents |
@@ -123,6 +127,7 @@ Services exposed:
 | `GET` | `/health` | Health check for API and Neo4j connectivity |
 
 ---
+
 
 ## Uploading Documents via cURL
 

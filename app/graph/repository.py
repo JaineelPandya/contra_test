@@ -211,6 +211,7 @@ class GraphRepository:
         reference_number: Optional[str] = None,
         circular_number: Optional[str] = None,
         date: Optional[str] = None,
+        exclude_document_id: Optional[str] = None,
     ) -> Optional[Document]:
         """Search existing documents matching exact or normalized reference_number, circular_number, or filename."""
         from app.services.reference_detector import normalize_reference_number
@@ -218,44 +219,59 @@ class GraphRepository:
         norm_ref = normalize_reference_number(reference_number) if reference_number else None
         ref_suffix = None
         if norm_ref:
-            m = re.search(r"([0-9]{4,6})", norm_ref)
+            m = re.search(r"/([0-9]{1,6})$", norm_ref)
             if m:
                 ref_suffix = m.group(1)
+            else:
+                m = re.search(r"([0-9]{4,6})", norm_ref)
+                if m:
+                    ref_suffix = m.group(1)
 
         norm_circ = circular_number.replace(" ", "").strip() if circular_number else None
 
         logger.info(
-            "Neo4j Document lookup | raw_ref='%s' | norm_ref='%s' | ref_suffix='%s' | circular_num='%s'",
+            "Neo4j Document lookup | raw_ref='%s' | norm_ref='%s' | ref_suffix='%s' | circular_num='%s' | date='%s' | exclude_id='%s'",
             reference_number,
             norm_ref,
             ref_suffix,
             norm_circ,
+            date,
+            exclude_document_id,
         )
 
         query = """
         MATCH (d:Document)
-        WHERE (
-            $norm_ref IS NOT NULL AND (
-                toLower(d.reference_number) = toLower($norm_ref)
-                OR replace(toLower(d.reference_number), ' ', '') = replace(toLower($norm_ref), ' ', '')
-                OR ($ref_suffix IS NOT NULL AND (
-                    d.reference_number CONTAINS $ref_suffix
-                    OR d.filename CONTAINS $ref_suffix
-                ))
+        WHERE ($exclude_id IS NULL OR d.document_id <> $exclude_id)
+          AND (
+            (
+                $norm_ref IS NOT NULL AND (
+                    toLower(d.reference_number) = toLower($norm_ref)
+                    OR replace(toLower(d.reference_number), ' ', '') = replace(toLower($norm_ref), ' ', '')
+                    OR ($ref_suffix IS NOT NULL AND (
+                        d.reference_number CONTAINS $ref_suffix
+                        OR d.circular_number CONTAINS $ref_suffix
+                        OR d.filename CONTAINS $ref_suffix
+                    ))
+                )
+            ) OR (
+                $circular_num IS NOT NULL AND (
+                    d.circular_number = $circular_num
+                    OR replace(toLower(d.circular_number), ' ', '') = replace(toLower($circular_num), ' ', '')
+                )
+            ) OR (
+                $date IS NOT NULL AND d.document_date = $date
             )
-        ) OR (
-            $circular_num IS NOT NULL AND (
-                d.circular_number = $circular_num
-                OR replace(toLower(d.circular_number), ' ', '') = replace(toLower($circular_num), ' ', '')
-            )
-        )
+          )
         RETURN d
+        ORDER BY (case when d.reference_number IS NOT NULL then 1 else 2 end)
         LIMIT 1
         """
         params = {
             "norm_ref": norm_ref,
             "ref_suffix": ref_suffix,
             "circular_num": norm_circ,
+            "date": date,
+            "exclude_id": exclude_document_id,
         }
         records = self.client.execute_query(query, params)
         if not records:
@@ -389,11 +405,13 @@ class GraphRepository:
             return
 
         for chunk in chunks:
+            chunk_path = chunk.path or (" > ".join(chunk.heading_path) if chunk.heading_path else "")
             chunk_query = """
             MERGE (c:Chunk {chunk_id: $chunk_id})
             SET c.document_id = $document_id,
                 c.content = $content,
                 c.heading_path = $heading_path,
+                c.path = $path,
                 c.parent_id = $parent_id,
                 c.previous_chunk_id = $previous_chunk_id,
                 c.next_chunk_id = $next_chunk_id,
@@ -409,6 +427,7 @@ class GraphRepository:
                     "document_id": document_id,
                     "content": chunk.content,
                     "heading_path": chunk.heading_path,
+                    "path": chunk_path,
                     "parent_id": chunk.parent_id,
                     "previous_chunk_id": chunk.previous_chunk_id,
                     "next_chunk_id": chunk.next_chunk_id,
@@ -418,6 +437,7 @@ class GraphRepository:
                     "token_count": chunk.token_count,
                 },
             )
+
 
             # Link Document -> Chunk
             doc_link = """
@@ -519,9 +539,15 @@ class GraphRepository:
             SET f.document_id = $document_id,
                 f.chunk_id = $chunk_id,
                 f.hierarchy_node_id = $hierarchy_node_id,
+                f.page_number = $page_number,
                 f.subject = $subject,
                 f.predicate = $predicate,
                 f.object = $object,
+                f.threshold = $threshold,
+                f.time = $time,
+                f.source_circular = $source_circular,
+                f.rule_reference = $rule_reference,
+                f.clause_reference = $clause_reference,
                 f.conditions = $conditions,
                 f.exceptions = $exceptions,
                 f.regulatory_status = $regulatory_status,
@@ -544,9 +570,15 @@ class GraphRepository:
                     "document_id": document_id,
                     "chunk_id": fact.chunk_id,
                     "hierarchy_node_id": fact.hierarchy_node_id,
+                    "page_number": fact.page_number,
                     "subject": fact.subject,
                     "predicate": fact.predicate.value,
                     "object": fact.object,
+                    "threshold": fact.threshold,
+                    "time": fact.time,
+                    "source_circular": fact.source_circular,
+                    "rule_reference": fact.rule_reference,
+                    "clause_reference": fact.clause_reference,
                     "conditions": fact.conditions,
                     "exceptions": fact.exceptions,
                     "regulatory_status": fact.regulatory_status,
@@ -564,13 +596,16 @@ class GraphRepository:
                 },
             )
 
-            # Provenance: (Chunk)-[:CONTAINS_FACT]->(Fact)
+
+            # Provenance: (Chunk)-[:CONTAINS_FACT]->(Fact) and (Fact)-[:SUPPORTED_BY]->(Chunk)
             prov_query = """
             MATCH (c:Chunk {chunk_id: $chunk_id})
             MATCH (f:Fact {fact_id: $fact_id})
             MERGE (c)-[:CONTAINS_FACT]->(f)
+            MERGE (f)-[:SUPPORTED_BY]->(c)
             """
             self.client.execute_query(prov_query, {"chunk_id": fact.chunk_id, "fact_id": fact.fact_id})
+
 
             # Direct shortcut: (Document)-[:HAS_FACT]->(Fact) for efficient cross-doc queries
             has_fact_query = """
@@ -612,11 +647,13 @@ class GraphRepository:
         records = self.client.execute_query(query, {"document_id": document_id})
         facts = []
         for rec in records:
-            fact_data = rec["f"]
+            fact_data = dict(rec["f"])
             fact_data["chunk_id"] = rec.get("chunk_id")
             fact_data["heading_path"] = rec.get("heading_path")
             fact_data["subject_entity"] = rec.get("subject_entity")
             fact_data["object_entity"] = rec.get("object_entity")
+            if not fact_data.get("object") and rec.get("object_entity"):
+                fact_data["object"] = rec["object_entity"]
             facts.append(fact_data)
         return facts
 
@@ -627,7 +664,16 @@ class GraphRepository:
         if not ref.target_document_id:
             return
 
-        rel_type = "AMENDS" if ref.reference_type == "AMENDS" else "REFERENCES"
+        _rel_aliases = {
+            "SUPERSEDES": "SUPERSEDES",
+            "REPLACES": "SUPERSEDES",
+            "MODIFIES": "MODIFIES",
+            "AMENDS": "AMENDS",
+            "CLARIFIES": "CLARIFIES",
+            "DELETES": "DELETES",
+            "REFERENCES": "REFERENCES",
+        }
+        rel_type = _rel_aliases.get((ref.reference_type or "REFERENCES").upper(), "REFERENCES")
         doc_ref_query = f"""
         MATCH (source:Document {{document_id: $source_doc_id}})
         MATCH (target:Document {{document_id: $target_doc_id}})
@@ -657,10 +703,12 @@ class GraphRepository:
             },
         )
         logger.info(
-            "Persisted Neo4j Document relationship: (Document {id=%s})-[:REFERENCES_DOC]->(Document {id=%s})",
+            "Persisted Neo4j Document relationship: (Document {id=%s})-[:%s]->(Document {id=%s})",
             ref.source_document_id,
+            rel_type,
             ref.target_document_id,
         )
+
 
         # If specific clause references exist, link them
         if ref.source_clause_id and ref.target_clause_id:
@@ -738,13 +786,21 @@ class GraphRepository:
 
         # If source fact and target fact exist, create direct semantic fact-to-fact evolution edge
         if event.source_fact_id and event.target_fact_id:
-            rel_name = event.change_type.value
+            _verb_map = {
+                ChangeType.MODIFIED: "MODIFIES",
+                ChangeType.DELETED: "DELETES",
+                ChangeType.SUPERSEDED: "SUPERSEDES",
+                ChangeType.CLARIFIED: "CLARIFIES",
+                ChangeType.CREATED: "CREATED",
+            }
+            rel_name = _verb_map.get(event.change_type, "MODIFIES")
             fact_rel_query = f"""
             MATCH (new_fact:Fact {{fact_id: $new_fact_id}})
             MATCH (old_fact:Fact {{fact_id: $old_fact_id}})
             MERGE (new_fact)-[r:{rel_name}]->(old_fact)
             SET r.change_event_id = $event_id,
-                r.effective_date = $effective_date
+                r.effective_date = $effective_date,
+                r.updated_at = timestamp()
             """
             self.client.execute_query(
                 fact_rel_query,
@@ -755,6 +811,11 @@ class GraphRepository:
                     "effective_date": event.effective_date,
                 },
             )
+            logger.info(
+                "Created fact evolution edge: (Fact %s)-[:%s]->(Fact %s)",
+                event.source_fact_id, rel_name, event.target_fact_id,
+            )
+
 
         logger.info(
             "Saved ChangeEvent | id=%s | type=%s | target_clause='%s' | target_doc=%s",
@@ -792,17 +853,56 @@ class GraphRepository:
         target_document_id: str,
         point_or_clause: str,
     ) -> List[Dict[str, Any]]:
-        """Find facts in target document that belong to a specific point or clause (e.g. 'Point 3', 'Point No. 3')."""
+        """Find facts in target document that belong to a specific point or clause (e.g. 'Point 3', 'Point 1', 'Rule 8(1)(f)')."""
+        num_m = re.search(r"(\d+[a-zA-Z]?)", point_or_clause)
+        target_num = num_m.group(1) if num_m else point_or_clause
+
         query = """
         MATCH (d:Document {document_id: $doc_id})
-        MATCH (d)-[:HAS_SECTION|HAS_SUBSECTION|HAS_CLAUSE*1..5]->(c)
-        WHERE toLower(c.title) CONTAINS toLower($pattern)
-           OR any(word IN split($pattern, ' ') WHERE toLower(c.title) CONTAINS toLower(word))
-        MATCH (c)-[:HAS_CHUNK]->(ch:Chunk)-[:CONTAINS_FACT]->(f:Fact)
+        MATCH (d)-[:HAS_CHUNK]->(ch:Chunk)<-[:SUPPORTED_BY]-(f:Fact)
+        WHERE (f.clause_reference IS NOT NULL AND (toLower(f.clause_reference) = toLower($pattern) OR f.clause_reference = ('Point ' + $target_num)))
+           OR (f.rule_reference IS NOT NULL AND toLower(f.rule_reference) = toLower($pattern))
+           OR (ch.path IS NOT NULL AND ch.path =~ ('.*(?i)\\b' + $pattern + '\\b.*'))
+           OR (f.source_text =~ ('(?i)^\\s*' + $target_num + '\\..*'))
+           OR (f.source_text =~ ('.*(?i)\\bPoint\\s*(?:No\\.?)?\\s*' + $target_num + '\\b.*'))
+           OR (f.source_text =~ ('.*(?i)\\b' + $pattern + '\\b.*'))
         RETURN DISTINCT f.fact_id AS fact_id, f.subject AS subject, f.predicate AS predicate,
-                        f.object AS object, f.status AS status, c.title AS clause_title
+                        f.object AS object, f.status AS status, coalesce(ch.path, '') AS clause_title,
+                        f.source_text AS source_text, f.rule_reference AS rule_reference,
+                        f.clause_reference AS clause_reference
         """
-        return self.client.execute_query(query, {"doc_id": target_document_id, "pattern": point_or_clause})
+        return self.client.execute_query(
+            query,
+            {
+                "doc_id": target_document_id,
+                "pattern": point_or_clause,
+                "target_num": target_num,
+            },
+        )
+
+
+    def cleanup_bad_facts_and_relationships(self) -> Dict[str, int]:
+        """Purge metadata facts and false Cartesian AMENDS/MODIFIES relationships from the graph."""
+        # 1. Delete facts that are pure document metadata / headers / signatures
+        del_meta_query = """
+        MATCH (f:Fact)
+        WHERE f.source_text =~ '(?i)^(Date:|DEPARTMENT:|Download Ref|Circular Ref|NATIONAL STOCK|Page \\d+|CIN|Tel No|To All Members|Yours faithfully|Regd\\.? Office|CIRCULAR Ref).*'
+           OR (f.object IS NOT NULL AND f.object =~ '(?i)^(Date:|DEPARTMENT:|Download Ref|Circular Ref|NATIONAL STOCK|Page \\d+|CIN|Tel No|To All Members|Yours faithfully).*')
+        DETACH DELETE f
+        """
+        self.client.execute_query(del_meta_query)
+
+        # 2. Delete any MODIFIES / SUPERSEDES / AMENDS / CLARIFIES relationships between facts that don't have matching rules/clauses or are across identical documents
+        del_false_rels = """
+        MATCH (f1:Fact)-[r:MODIFIES|SUPERSEDES|CLARIFIES|AMENDS]->(f2:Fact)
+        WHERE (f1.document_id = f2.document_id)
+           OR (f1.source_text =~ '(?i)^(Date:|DEPARTMENT:|Download Ref|Circular Ref|NATIONAL STOCK|Page \\d+).*')
+           OR (f2.source_text =~ '(?i)^(Date:|DEPARTMENT:|Download Ref|Circular Ref|NATIONAL STOCK|Page \\d+).*')
+        DELETE r
+        """
+        self.client.execute_query(del_false_rels)
+        return {"status": "cleanup_completed"}
+
 
     def find_all_facts_by_document(self, document_id: str) -> List[Dict[str, Any]]:
         """Find all facts belonging to a document."""
@@ -851,12 +951,13 @@ class GraphRepository:
             "AMENDS": "MODIFIES",
             "EXTENDS": "MODIFIES",
             "REPLACES": "SUPERSEDES",
+            "REPEALS": "DELETES",
             "EXEMPTS": "EXCEPTION_TO",
         }
         _discard = {"APPLIES_TO", "RELATED_TO", "NONE"}
         _canonical = {
             "MODIFIES", "SUPERSEDES", "DELETES", "CLARIFIES",
-            "REFERENCES", "EXCEPTION_TO", "DEPENDS_ON", "CONTRADICTS",
+            "REFERENCES", "EXCEPTION_TO", "DEPENDS_ON", "CONTRADICTS", "CHANGE",
         }
 
         if rel_upper in _discard:
@@ -878,6 +979,11 @@ class GraphRepository:
         SET r.confidence = $confidence,
             r.reason = $reason,
             r.extraction_method = $extraction_method,
+            r.change_type = $change_type,
+            r.action = $action,
+            r.source_circular = $source_circular,
+            r.old_relation = $old_relation,
+            r.new_relation = $new_relation,
             r.updated_at = timestamp()
         """
         self.client.execute_query(
@@ -888,6 +994,52 @@ class GraphRepository:
                 "confidence": props.get("confidence", 0.95),
                 "reason": props.get("reason", ""),
                 "extraction_method": props.get("extraction_method", "groq"),
+                "change_type": props.get("change_type"),
+                "action": props.get("action"),
+                "source_circular": props.get("source_circular"),
+                "old_relation": props.get("old_relation"),
+                "new_relation": props.get("new_relation"),
+            },
+        )
+
+    def create_change_relationship(
+        self,
+        source_fact_id: str,
+        target_fact_id: str,
+        change_type: str,
+        action: str,
+        reason: str,
+        source_circular: Optional[str] = None,
+        confidence: float = 0.95,
+        old_relation: Optional[str] = None,
+        new_relation: Optional[str] = None,
+    ) -> None:
+        """Create explicit CHANGE relationship edge between 2026 Fact and 2024 Fact."""
+        query = """
+        MATCH (f1:Fact {fact_id: $src_id})
+        MATCH (f2:Fact {fact_id: $tgt_id})
+        MERGE (f1)-[r:CHANGE]->(f2)
+        SET r.change_type = $change_type,
+            r.action = $action,
+            r.reason = $reason,
+            r.source_circular = $source_circular,
+            r.confidence = $confidence,
+            r.old_relation = $old_relation,
+            r.new_relation = $new_relation,
+            r.updated_at = timestamp()
+        """
+        self.client.execute_query(
+            query,
+            {
+                "src_id": source_fact_id,
+                "tgt_id": target_fact_id,
+                "change_type": change_type,
+                "action": action,
+                "reason": reason,
+                "source_circular": source_circular,
+                "confidence": confidence,
+                "old_relation": old_relation,
+                "new_relation": new_relation,
             },
         )
 
@@ -909,10 +1061,12 @@ class GraphRepository:
 
         query = """
         MATCH (f:Fact {document_id: $document_id})
-        WHERE toLower(f.source_text) CONTAINS toLower($clause_id)
+        WHERE (f.clause_reference IS NOT NULL AND (toLower(f.clause_reference) = toLower($clause_id) OR f.clause_reference = ('Point ' + $num_clause)))
+           OR (f.rule_reference IS NOT NULL AND toLower(f.rule_reference) = toLower($clause_id))
+           OR toLower(f.source_text) CONTAINS toLower($clause_id)
            OR toLower(f.object) CONTAINS toLower($clause_id)
-           OR f.source_text =~ ('(?i)^\\s*' + $num_clause + '[.:) ].*')
-           OR f.source_text =~ ('(?i).*\\b' + $num_clause + '[.:) ].*')
+           OR f.source_text =~ ('(?i)^\\s*' + $num_clause + '\\..*')
+           OR f.source_text =~ ('.*(?i)\\bPoint\\s*(?:No\\.?)?\\s*' + $num_clause + '\\b.*')
         SET f.status = $status,
             f.valid_to = CASE WHEN $valid_to IS NOT NULL THEN $valid_to ELSE f.valid_to END,
             f.updated_at = $updated_at
@@ -923,6 +1077,7 @@ class GraphRepository:
         )
         RETURN count(f) AS updated_count, collect(f.fact_id) AS affected_fact_ids
         """
+
         records = self.client.execute_query(
             query,
             {
@@ -1053,3 +1208,51 @@ class GraphRepository:
             j.updated_at = timestamp()
         """
         self.client.execute_query(query, {"job_id": job_id, "status": status})
+
+    def get_graph_diagnostics(self) -> Dict[str, Any]:
+        """Diagnostic count summary for verifying graph construction and relationships."""
+        query = """
+        CALL {
+            MATCH (d:Document) RETURN count(d) AS documents_count
+        }
+        CALL {
+            MATCH (c:Chunk) RETURN count(c) AS chunks_count
+        }
+        CALL {
+            MATCH (f:Fact) RETURN count(f) AS facts_count
+        }
+        CALL {
+            MATCH (f:Fact {status: 'ACTIVE'}) RETURN count(f) AS active_facts_count
+        }
+        CALL {
+            MATCH (e:Entity) RETURN count(e) AS entities_count
+        }
+        CALL {
+            MATCH ()-[r:SUPPORTED_BY]->() RETURN count(r) AS supported_by_count
+        }
+        CALL {
+            MATCH ()-[r:MODIFIES|SUPERSEDES|CLARIFIES|DELETES|CONTRADICTS]->() RETURN count(r) AS fact_evolution_count
+        }
+        CALL {
+            MATCH (:Document)-[r:SUPERSEDES|AMENDS|MODIFIES|CLARIFIES|REFERENCES_DOC]->(:Document) RETURN count(r) AS doc_evolution_count
+        }
+        RETURN documents_count, chunks_count, facts_count, active_facts_count, entities_count,
+               supported_by_count, fact_evolution_count, doc_evolution_count
+        """
+        try:
+            records = self.client.execute_query(query)
+            if records:
+                return dict(records[0])
+        except Exception as e:
+            logger.warning("Graph diagnostics query failed: %s", e)
+        return {
+            "documents_count": 0,
+            "chunks_count": 0,
+            "facts_count": 0,
+            "active_facts_count": 0,
+            "entities_count": 0,
+            "supported_by_count": 0,
+            "fact_evolution_count": 0,
+            "doc_evolution_count": 0,
+        }
+

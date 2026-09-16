@@ -75,8 +75,11 @@ class InMemoryRepository:
         reference_number: Optional[str] = None,
         circular_number: Optional[str] = None,
         date: Optional[str] = None,
+        exclude_document_id: Optional[str] = None,
     ) -> Optional[Document]:
         for doc in self.documents.values():
+            if exclude_document_id and doc.document_id == exclude_document_id:
+                continue
             if reference_number and doc.reference_number and reference_number.lower() in doc.reference_number.lower():
                 return doc
             if circular_number and doc.circular_number == circular_number:

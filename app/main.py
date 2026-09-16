@@ -3,9 +3,14 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import os
+from pathlib import Path
+from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from app.api.documents import router as documents_router
 from app.api.health import router as health_router
 from app.api.processing import router as processing_router
+from app.api.query import router as query_router
 from app.core.config import get_settings
 from app.core.logging import logger, setup_logging
 from app.graph.neo4j_client import neo4j_client
@@ -61,6 +66,33 @@ def create_application() -> FastAPI:
     app.include_router(health_router)
     app.include_router(documents_router)
     app.include_router(processing_router)
+    app.include_router(query_router)
+
+    # Static assets and dashboard mounting
+    static_dir = Path(__file__).parent / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    NO_CACHE_HEADERS = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+
+    @app.get("/", include_in_schema=False)
+    async def root():
+        dashboard_file = static_dir / "dashboard.html"
+        if dashboard_file.exists():
+            return FileResponse(str(dashboard_file), headers=NO_CACHE_HEADERS)
+        return RedirectResponse(url="/docs")
+
+    @app.get("/dashboard", include_in_schema=False)
+    async def dashboard_page():
+        dashboard_file = static_dir / "dashboard.html"
+        if dashboard_file.exists():
+            return FileResponse(str(dashboard_file), headers=NO_CACHE_HEADERS)
+        return RedirectResponse(url="/docs")
+
 
     return app
 

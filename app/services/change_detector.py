@@ -101,7 +101,7 @@ class ChangeDetector:
 
                     for cls_res in classifications:
                         rel = cls_res.get("relationship", "NONE")
-                        if rel in {"MODIFIES", "DELETES", "SUPERSEDES", "CLARIFIES", "AMENDS", "REPLACES"}:
+                        if rel in {"MODIFIES", "DELETES", "SUPERSEDES", "CLARIFIES", "AMENDS", "REPLACES", "REPEALS", "EXTENDS"}:
                             src_id = cls_res.get("source_id")
                             tgt_id = cls_res.get("target_id")
 
@@ -109,7 +109,9 @@ class ChangeDetector:
                                 "MODIFIES": ChangeType.MODIFIED,
                                 "REPLACES": ChangeType.MODIFIED,
                                 "AMENDS": ChangeType.MODIFIED,
+                                "EXTENDS": ChangeType.MODIFIED,
                                 "DELETES": ChangeType.DELETED,
+                                "REPEALS": ChangeType.DELETED,
                                 "SUPERSEDES": ChangeType.SUPERSEDED,
                                 "CLARIFIES": ChangeType.CLARIFIED,
                             }
@@ -245,14 +247,15 @@ class ChangeDetector:
                     target_pt, source_doc_id, target_doc_id,
                 )
 
-        # 4. Single clause modifications: "Point No. 1 is amended to permit..."
+        # 4. Single clause modifications: "Point No. 1 is amended..." / "Clause 8 stands substituted..."
         single_mod_matches = re.finditer(
-            r"(?:Clause|Point|Section)\s*(?:No\.?)?\s*(\d+[a-zA-Z]?)[\s\S]{0,100}?(?:stands?\s*|is\s*|are\s*)?(?:modified|amended|substituted|revised)",
+            r"(?:Clause|Point|Section|Para(?:graph)?)\s*(?:No\.?)?\s*(\d+[a-zA-Z]?(?:\s*\.\s*[a-zA-Z0-9]+)*)[\s\S]{0,100}?(?:stands?\s*|is\s*|are\s*)?(?:modified|amended|substituted|revised|added)",
             text,
             re.IGNORECASE,
         )
         for m in single_mod_matches:
-            target_pt = f"Point {m.group(1)}"
+            cl_num = m.group(1).replace(" ", "")
+            target_pt = f"Point {cl_num}"
             key = (ChangeType.MODIFIED, target_pt)
             if key not in seen_keys:
                 seen_keys.add(key)
@@ -262,7 +265,7 @@ class ChangeDetector:
                         target_document_id=target_doc_id,
                         change_type=ChangeType.MODIFIED,
                         target_point_or_clause=target_pt,
-                        description=f"{target_pt} modified / substituted by new circular.",
+                        description=f"Clause / {target_pt} modified / substituted by amending circular.",
                         effective_date=effective_date,
                     )
                 )
@@ -271,7 +274,36 @@ class ChangeDetector:
                     target_pt, source_doc_id, target_doc_id,
                 )
 
+        # 5. Statutory Provisos & Rule Insertions (e.g. "The following Proviso has been inserted to Rule 8 (1)(f) and 8 (3)(f)", "following proviso shall be inserted, namely:")
+        proviso_matches = re.finditer(
+            r"(?:proviso|clause|sub-rule)\s*(?:has been\s*)?(?:inserted|added|substituted)\s*(?:to|in)\s*(?:Rule\s*)?([0-9\(\)a-zA-Z\s,and&]+?)[\s\S]{0,120}?(?:namely|which is as under)?:?\s*[\"“']?([\s\S]{20,400}?)[\"”']?(?:\n\n|\.\s*\"|\.\s*\n|\(ii\)|In view of)",
+            text,
+            re.IGNORECASE,
+        )
+        for m in proviso_matches:
+            raw_rule = m.group(1).strip()
+            target_rule = f"Rule {raw_rule}" if not raw_rule.lower().startswith("rule") else raw_rule
+            proviso_text = re.sub(r"\s+", " ", m.group(2).strip(" \"'“”\n"))
+            key = (ChangeType.MODIFIED, target_rule)
+            if key not in seen_keys and len(proviso_text) > 20:
+                seen_keys.add(key)
+                changes.append(
+                    ChangeEvent(
+                        source_document_id=source_doc_id,
+                        target_document_id=target_doc_id,
+                        change_type=ChangeType.MODIFIED,
+                        target_point_or_clause=target_rule,
+                        description=f"Statutory Proviso inserted in {target_rule}: \"{proviso_text}\"",
+                        effective_date=effective_date,
+                    )
+                )
+                logger.info(
+                    "Deterministic change candidate: STATUTORY PROVISO | target_clause='%s' | source_doc=%s | proviso='%s'",
+                    target_rule, source_doc_id, proviso_text[:80],
+                )
+
         return changes
+
 
     def _apply_single_change(
         self,
@@ -280,7 +312,7 @@ class ChangeDetector:
         target_doc_id: str,
         effective_date: Optional[str],
     ) -> None:
-        """Persist ChangeEvent node and update affected fact statuses in Neo4j."""
+        """Persist ChangeEvent node, update affected fact statuses, and link fact-level evolution in Neo4j."""
         self.repository.save_change_event(change)
 
         if change.change_type == ChangeType.DELETED:
@@ -292,12 +324,72 @@ class ChangeDetector:
                     valid_to=effective_date,
                     change_event_id=change.id,
                 )
-        elif change.change_type in (ChangeType.MODIFIED, ChangeType.SUPERSEDED):
+        elif change.change_type in (ChangeType.MODIFIED, ChangeType.SUPERSEDED, ChangeType.CLARIFIED):
             if change.target_point_or_clause:
+                new_stat = (
+                    FactStatus.MODIFIED if change.change_type == ChangeType.MODIFIED
+                    else (FactStatus.SUPERSEDED if change.change_type == ChangeType.SUPERSEDED else FactStatus.ACTIVE)
+                )
                 self.repository.update_facts_status_by_clause(
                     document_id=target_doc_id,
                     clause_identifier=change.target_point_or_clause,
-                    new_status=FactStatus.MODIFIED if change.change_type == ChangeType.MODIFIED else FactStatus.SUPERSEDED,
+                    new_status=new_stat,
                     valid_to=effective_date,
                     change_event_id=change.id,
                 )
+
+                # Link matching new source facts to old target facts with strict word boundaries
+                target_facts = self.repository.find_target_facts_by_point_or_clause(
+                    target_doc_id, change.target_point_or_clause
+                )
+                clause_num_m = re.search(r"(\d+[a-zA-Z]?)", change.target_point_or_clause)
+                target_num = clause_num_m.group(1) if clause_num_m else change.target_point_or_clause
+
+                if change.target_point_or_clause.lower().startswith("rule"):
+                    ptn = re.escape(change.target_point_or_clause.lower())
+                else:
+                    ptn = r"\b(?:Point(?:\s*No\.?)?\s*|^\s*)" + re.escape(target_num) + r"(?:\b|\.|\:)"
+
+                def clean_snippet(t: str) -> str:
+                    c = re.sub(r"^\s*(\d+[.:) ]\s*|Point(?:\s*No\.?)?\s*\d+\s*)", "", t).strip()
+                    return c[:35].lower()
+
+                matching_source_facts = [
+                    sf for sf in new_facts
+                    if (sf.clause_reference and (sf.clause_reference.lower() == change.target_point_or_clause.lower() or sf.clause_reference.lower() == f"point {target_num}".lower()))
+                    or (sf.rule_reference and sf.rule_reference.lower() == change.target_point_or_clause.lower())
+                    or re.search(ptn, sf.source_text.lower())
+                    or any(
+                        clean_snippet(tf.get("source_text", "")) in clean_snippet(sf.source_text)
+                        for tf in target_facts
+                        if len(clean_snippet(tf.get("source_text", ""))) >= 20
+                    )
+                ]
+
+
+                rel_verb = "MODIFIES" if change.change_type == ChangeType.MODIFIED else "SUPERSEDES"
+                for sf in matching_source_facts:
+                    for tf in target_facts:
+                        tf_id = tf.get("fact_id") if isinstance(tf, dict) else getattr(tf, "fact_id", None)
+                        tf_text = tf.get("source_text", "") if isinstance(tf, dict) else getattr(tf, "source_text", "")
+                        # Reject metadata target
+                        if tf_text and re.search(r"^(?:Date:|DEPARTMENT:|Download Ref|Circular Ref|NATIONAL STOCK|Page \d+|CIN)", tf_text.strip(), re.IGNORECASE):
+                            continue
+                        if tf_id and tf_id != sf.fact_id:
+                            self.repository.create_fact_relationship(
+                                source_fact_id=sf.fact_id,
+                                target_fact_id=tf_id,
+                                relationship_type=rel_verb,
+                                properties={
+                                    "confidence": 1.0,
+                                    "reason": f"Exact clause match for {change.target_point_or_clause}",
+                                    "extraction_method": "deterministic_amendment",
+                                },
+                            )
+                            logger.info(
+                                "Linked deterministic fact evolution: (Fact %s)-[:%s]->(Fact %s) for %s",
+                                sf.fact_id[:8], rel_verb, tf_id[:8], change.target_point_or_clause,
+                            )
+
+
+

@@ -58,6 +58,20 @@ CANONICAL_ENTITIES = [
         "aliases": ["Rule 8(1)(f)", "Rule 8 1 f", "Rule 8(1)(f) of SCR Rules, 1957"],
         "pattern": r"\b(Rule\s*8\s*\(\s*1\s*\)\s*\(\s*f\s*\)|SCR\s*Rules|Securities Contracts Regulations Rules)\b",
     },
+    {
+        "name": "Asset Management Company",
+        "normalized_name": "ASSET MANAGEMENT COMPANY",
+        "type": EntityType.ORGANIZATION,
+        "aliases": ["AMC", "AMCs", "Asset Management Companies", "Asset Management Company"],
+        "pattern": r"\b(Asset\s+Management\s+Companies|Asset\s+Management\s+Company|AMCs|AMC)\b",
+    },
+    {
+        "name": "Mutual Fund",
+        "normalized_name": "MUTUAL FUND",
+        "type": EntityType.ORGANIZATION,
+        "aliases": ["Mutual Fund", "Mutual Funds", "MF"],
+        "pattern": r"\b(Mutual\s+Funds|Mutual\s+Fund)\b",
+    },
 ]
 
 
@@ -126,6 +140,10 @@ class EntityResolver:
             return "CLEARING MEMBER"
         if norm in {"CLIENTS", "INVESTOR", "INVESTORS"}:
             return "CLIENT"
+        if norm in {"AMC", "AMCS", "ASSET MANAGEMENT COMPANIES", "ASSET MANAGEMENT COMPANY"}:
+            return "ASSET MANAGEMENT COMPANY"
+        if norm in {"MF", "MUTUAL FUNDS", "MUTUAL FUND"}:
+            return "MUTUAL FUND"
         return norm
 
     def _infer_entity_type(self, name: str) -> EntityType:
@@ -141,4 +159,6 @@ class EntityResolver:
             return EntityType.CLIENT
         if "RULE" in upper or "ACT" in upper or "SECTION" in upper or "REGULATION" in upper:
             return EntityType.RULE
+        if "AMC" in upper or "ASSET MANAGEMENT" in upper or "MUTUAL FUND" in upper:
+            return EntityType.ORGANIZATION
         return EntityType.ORGANIZATION

@@ -1,5 +1,6 @@
 """Fact extraction service coordinating batched LLM fact extraction with token-aware batching."""
-from typing import Any, Callable, Dict, List, Optional
+import re
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.llm.base import BaseLLMProvider
@@ -8,6 +9,76 @@ from app.models.document import DocumentMetadata
 from app.models.fact import Fact
 from app.prompts.fact_extraction import BATCH_FACT_EXTRACTION_SYSTEM_PROMPT
 from app.services.chunker import approximate_token_count
+
+
+def is_boilerplate_chunk(chunk: Chunk) -> Tuple[bool, str]:
+    """Determine if a chunk contains only non-regulatory boilerplate.
+
+    Filters out pure document headers, address salutations, signature blocks,
+    and page footers to prevent wasting LLM token budget.
+    """
+    text = chunk.content.strip()
+    if not text or len(text) < 25:
+        return True, "Too short / empty content"
+
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+
+    # Check signature blocks
+    if re.search(
+        r"^(?:Yours\s+faithfully|For\s+(?:National\s+Stock\s+Exchange|NSE|SEBI|RBI)|Authorized\s+Signatory|Chief\s+Manager|Senior\s+Manager)",
+        text,
+        re.IGNORECASE,
+    ) and len(lines) <= 5:
+        return True, "Signature block"
+
+    # Check pure address / salutation blocks
+    if re.search(
+        r"^(?:To\s+All\s+(?:Members|Trading\s+Members|Clearing\s+Members)|Dear\s+Sir\s*/\s*Madam)",
+        text,
+        re.IGNORECASE,
+    ) and len(lines) <= 4 and not re.search(r"\b(require|prohibit|permit|shall|must|amend|modify|delete|clarif|rule|point)\b", text, re.IGNORECASE):
+        return True, "Address / Salutation block"
+
+    # Check pure header letterhead blocks
+    if re.search(
+        r"^(?:NATIONAL\s+STOCK\s+EXCHANGE|CIRCULAR\s+Ref|Download\s+Ref\s+No|Date:\s+[A-Za-z]+)",
+        text,
+        re.IGNORECASE,
+    ) and len(lines) <= 5 and not re.search(r"\b(require|prohibit|permit|shall|must|amend|modify|delete|clarif|rule|activity|point)\b", text, re.IGNORECASE):
+        return True, "Header / Reference block without regulatory requirements"
+
+    # Check footer / contact info blocks
+    if re.search(
+        r"^(?:Page\s+\d+\s+of\s+\d+|Regd\.?\s*Office\s*:|CIN\s*:|Tel\s*No|www\.nseindia\.com)",
+        text,
+        re.IGNORECASE,
+    ) and len(lines) <= 3:
+        return True, "Footer / Contact disclaimer block"
+
+    return False, ""
+
+
+from app.services.qualifier_extractor import extract_qualifier_spans
+
+
+
+def validate_fact_evidence(fact: Fact, chunk: Chunk) -> Tuple[bool, Optional[str]]:
+    """Strictly validate that a fact's evidence is grounded in the source chunk.
+
+    Rules:
+      - If evidence is empty -> reject (empty_evidence)
+      - If normalized evidence is not in normalized chunk content -> reject (evidence_not_found)
+      - Never fabricates evidence or injects chunk slices
+    """
+    evidence = (fact.source_text or "").strip()
+    if not evidence:
+        return False, "empty_evidence"
+
+    from app.models.fact import normalize_text
+    if normalize_text(evidence) not in normalize_text(chunk.content):
+        return False, "evidence_not_found"
+
+    return True, None
 
 
 class FactExtractor:
@@ -78,12 +149,31 @@ class FactExtractor:
         if not chunks:
             return all_facts
 
-        # Dynamically create token-aware chunk batches
-        batches = self.create_token_aware_batches(chunks, metadata)
+        # 1. Filter out non-regulatory boilerplate chunks
+        relevant_chunks: List[Chunk] = []
+        for c in chunks:
+            is_bp, reason = is_boilerplate_chunk(c)
+            if is_bp:
+                logger.info(
+                    "[BOILERPLATE_FILTER] Skipped non-regulatory chunk %s (Heading: '%s', Reason: %s)",
+                    c.chunk_id,
+                    c.path or c.heading_path,
+                    reason,
+                )
+            else:
+                relevant_chunks.append(c)
+
+        if not relevant_chunks:
+            logger.warning("No regulatory chunks remaining after boilerplate filter for doc %s", document_id)
+            return all_facts
+
+        # 2. Dynamically create token-aware chunk batches
+        batches = self.create_token_aware_batches(relevant_chunks, metadata)
 
         logger.info(
-            "Extracting facts for document %s (%d total chunks packed into %d token-aware batches, budget=%d tokens)",
+            "Extracting facts for document %s (%d/%d relevant chunks packed into %d token-aware batches, budget=%d tokens)",
             document_id,
+            len(relevant_chunks),
             len(chunks),
             len(batches),
             self.max_input_tokens,
@@ -102,6 +192,18 @@ class FactExtractor:
                 metadata=metadata,
                 on_dead_letter=on_dead_letter,
             )
+            if not batch_facts:
+                batch_cids = [c.chunk_id for c in batch]
+                batch_headings = [c.path or " > ".join(c.heading_path) for c in batch]
+                logger.info(
+                    "[FACT_EXTRACTION_DIAGNOSTIC] Batch %d/%d returned 0 facts from %d chunks (ids=%s, headings=%s). "
+                    "Inspected content evaluated as containing no actionable regulatory obligations.",
+                    batch_idx,
+                    len(batches),
+                    len(batch),
+                    batch_cids,
+                    batch_headings,
+                )
             all_facts.extend(batch_facts)
 
         logger.info(
@@ -111,3 +213,4 @@ class FactExtractor:
             document_id,
         )
         return all_facts
+

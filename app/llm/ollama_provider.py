@@ -105,11 +105,23 @@ class OllamaProvider(BaseLLMProvider):
                 raw_facts = res.get("facts", [])
 
                 for rf in raw_facts:
-                    pred_str = str(rf.get("predicate", "REQUIRES")).upper()
+                    pred_str = str(rf.get("predicate", "")).strip().upper()
                     try:
                         predicate = FactPredicate(pred_str)
                     except ValueError:
-                        predicate = FactPredicate.REQUIRES
+                        logger.warning("Rejected fact: invalid_predicate chunk_id=%s predicate=%r", cid, pred_str)
+                        continue
+
+                    obj_str = str(rf.get("object", "")).strip()
+                    if not obj_str:
+                        logger.warning("Rejected fact: empty object in chunk_id=%s", cid)
+                        continue
+
+                    raw_cond = rf.get("condition")
+                    conds = [raw_cond] if isinstance(raw_cond, str) and raw_cond.strip() else list(rf.get("conditions") or [])
+
+                    raw_exc = rf.get("exception")
+                    excs = [raw_exc] if isinstance(raw_exc, str) and raw_exc.strip() else list(rf.get("exceptions") or [])
 
                     fact = Fact(
                         document_id=document_id,
@@ -117,9 +129,14 @@ class OllamaProvider(BaseLLMProvider):
                         hierarchy_node_id=matched_chunk.parent_id if matched_chunk else None,
                         subject=rf.get("subject", "Regulated Entity"),
                         predicate=predicate,
-                        object=rf.get("object", ""),
-                        conditions=rf.get("conditions", []),
-                        exceptions=rf.get("exceptions", []),
+                        object=obj_str,
+                        rule_reference=rf.get("rule_reference"),
+                        clause_reference=rf.get("clause_reference"),
+                        conditions=conds,
+                        exceptions=excs,
+                        threshold=rf.get("threshold"),
+                        time=rf.get("time"),
+                        source_circular=rf.get("source_circular"),
                         regulatory_status=rf.get("regulatory_status", "ACTIVE"),
                         effective_date=rf.get("effective_date"),
                         confidence=float(rf.get("confidence", 0.9)),

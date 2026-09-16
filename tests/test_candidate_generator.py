@@ -71,7 +71,86 @@ def test_candidate_generator_keyword_scoring_and_top_k():
 
     # Best candidates should have high scores
     for cand in candidates:
-        assert cand["score"] >= 0.3
+        assert cand["score"] >= 0.5
         assert "source_id" in cand
         assert "target_id" in cand
         assert "reasons" in cand
+
+
+def test_digital_gold_unrelated_candidate_rejection():
+    """Verify that unrelated FAQ facts do NOT pair with metadata or non-matching clauses."""
+    generator = CandidateGenerator()
+
+    # 1. Unrelated FAQ fact
+    digital_gold_fact = Fact(
+        fact_id="src-digital-gold",
+        document_id="doc-2026",
+        chunk_id="chk-faq-6",
+        subject="Trading Member",
+        predicate=FactPredicate.PROHIBITS,
+        object="providing a platform to the clients for buying and selling of digital gold or any product not covered",
+        clause_reference="Question 6",
+        source_text="Question 6: Whether members are permitted to enter into any agreement for providing a platform for digital gold? Answer: No.",
+    )
+
+    # 2. Candidate old facts including metadata, dates, and different clauses
+    old_metadata_date = Fact(
+        fact_id="old-meta-date",
+        document_id="doc-2022",
+        chunk_id="chk-meta-1",
+        subject="Trading Member",
+        predicate=FactPredicate.REQUIRES,
+        object="Date: January 07, 2022",
+        source_text="Date: January 07, 2022",
+    )
+    old_metadata_ref = Fact(
+        fact_id="old-meta-ref",
+        document_id="doc-2022",
+        chunk_id="chk-meta-2",
+        subject="Trading Member",
+        predicate=FactPredicate.REQUIRES,
+        object="Download Ref No: NSE/COMP/50957",
+        source_text="Download Ref No: NSE/COMP/50957",
+    )
+    old_point_1 = Fact(
+        fact_id="old-point-1",
+        document_id="doc-2022",
+        chunk_id="chk-pt-1",
+        subject="Trading Member",
+        predicate=FactPredicate.PROHIBITS,
+        object="Issuing Corporate Guarantees towards credit facilities availed by any entity",
+        rule_reference="Rule 8(1)(f)",
+        clause_reference="Point 1",
+        source_text="Point No. 1. Issuing Corporate Guarantees towards credit facilities availed by any entity.",
+    )
+    old_broker_agent = Fact(
+        fact_id="old-broker-agent",
+        document_id="doc-2022",
+        chunk_id="chk-pt-x",
+        subject="Trading Member",
+        predicate=FactPredicate.REQUIRES,
+        object="broker or agent, not involving any personal financial liability.",
+        source_text="broker or agent, not involving any personal financial liability.",
+    )
+
+    ref = DocumentReference(
+        source_document_id="doc-2026",
+        target_document_id="doc-2022",
+        target_reference_number="NSE/COMP/50957",
+        reference_text="in partial modification of Circular Ref No. NSE/COMP/50957",
+    )
+
+    candidates = generator.generate_candidates(
+        source_facts=[digital_gold_fact],
+        target_facts=[old_metadata_date, old_metadata_ref, old_point_1, old_broker_agent],
+        references=[ref],
+    )
+
+    # Must NOT produce any false candidates against metadata or unrelated points
+    matched_target_ids = {c["target_id"] for c in candidates}
+    assert "old-meta-date" not in matched_target_ids
+    assert "old-meta-ref" not in matched_target_ids
+    assert "old-point-1" not in matched_target_ids
+    assert "old-broker-agent" not in matched_target_ids
+    assert len(candidates) == 0  # No valid anchor exists for digital gold against 2022 Point 1 or metadata
+

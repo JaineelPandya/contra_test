@@ -126,14 +126,26 @@ class DocumentPipeline:
             )
             entities = self.entity_resolver.resolve_from_facts(facts=facts, chunks=chunks)
 
-            # 7. REFERENCE DETECTION
+            # 7. NEO4J CORE STORAGE PERSISTENCE (Save hierarchy, chunks, entities, facts before relationship linking)
+            self.repository.update_document_status(
+                document_id,
+                stage=ProcessingStage.NEO4J_STORAGE,
+            )
+            self.repository.save_hierarchy_nodes(document_id, hierarchy_nodes)
+            self.repository.save_chunks(document_id, chunks)
+            self.repository.save_entities(entities)
+            self.repository.save_facts(document_id, facts)
+
+            # 8. REFERENCE DETECTION
             self.repository.update_document_status(
                 document_id,
                 stage=ProcessingStage.REFERENCE_DETECTION,
             )
             references = await self.reference_detector.detect_references(document_id, chunks)
+            for ref in references:
+                self.repository.save_reference(ref)
 
-            # 8. CHANGE DETECTION (Candidate Generation + Batched Semantic Verification)
+            # 9. CHANGE DETECTION & TEMPORAL EVOLUTION (Candidate Generation + Batched Semantic Verification)
             self.repository.update_document_status(
                 document_id,
                 stage=ProcessingStage.CHANGE_DETECTION,
@@ -147,23 +159,6 @@ class DocumentPipeline:
                 on_dead_letter=lambda code, err, payload: record_dead_letter("RELATIONSHIP_CLASSIFICATION", code, err, payload),
             )
 
-            # 9. NEO4J STORAGE PERSISTENCE
-            self.repository.update_document_status(
-                document_id,
-                stage=ProcessingStage.NEO4J_STORAGE,
-            )
-            # Save hierarchy tree
-            self.repository.save_hierarchy_nodes(document_id, hierarchy_nodes)
-            # Save chunks and sequential NEXT/PREVIOUS links
-            self.repository.save_chunks(document_id, chunks)
-            # Save resolved entities
-            self.repository.save_entities(entities)
-            # Save facts and provenance links
-            self.repository.save_facts(document_id, facts)
-            # Save cross-document references
-            for ref in references:
-                self.repository.save_reference(ref)
-
             # 10. MARK COMPLETED
             self.repository.update_document_status(
                 document_id,
@@ -171,6 +166,7 @@ class DocumentPipeline:
                 stage=ProcessingStage.COMPLETED,
             )
             logger.info("Successfully completed processing pipeline for document_id: %s", document_id)
+
 
         except Exception as e:
             error_msg = f"Pipeline execution failed for document {document_id}: {str(e)}"

@@ -14,19 +14,16 @@ def normalize_reference_number(ref: Optional[str]) -> Optional[str]:
 
     Examples:
       'NSE / COMP / 50957' -> 'NSE/COMP/50957'
-      '  nse/comp/50957  ' -> 'NSE/COMP/50957'
-      'NSE-COMP-50957'    -> 'NSE/COMP/50957'
-      'NSE/COMP50957'     -> 'NSE/COMP/50957'
-      'COMP50957'         -> 'COMP50957'
+      'SEBI/HO/OIAE/OIAE_IAD-1/P/CIR/2023/131' -> 'SEBI/HO/OIAE/OIAE_IAD-1/P/CIR/2023/131'
     """
     if not ref:
         return None
     cleaned = ref.strip().upper()
     # Remove whitespace around slashes and dashes
     cleaned = re.sub(r"\s*/\s*", "/", cleaned)
-    cleaned = re.sub(r"\s*-\s*", "/", cleaned)
+    cleaned = re.sub(r"\s*-\s*", "-", cleaned)
     # Standardize NSE/<DEPT>/<NUM>
-    m = re.match(r"^NSE/?([A-Z]{2,6})/?([0-9]{4,6})$", cleaned)
+    m = re.match(r"^NSE(?:/|-)?([A-Z]{2,6})(?:/|-)?([0-9]{4,6})$", cleaned)
     if m:
         return f"NSE/{m.group(1)}/{m.group(2)}"
     return cleaned
@@ -87,6 +84,7 @@ class ReferenceDetector:
                 reference_number=norm_ref,
                 circular_number=ref.target_circular_number,
                 date=ref.target_date,
+                exclude_document_id=document_id,
             )
 
             if target_doc and target_doc.document_id != document_id:
@@ -123,19 +121,25 @@ class ReferenceDetector:
         )
         return resolved_references
 
+    def _detect_ref_type(self, text_context: str) -> str:
+        """Classify relationship type from surrounding regulatory formula context."""
+        ctx = text_context.lower()
+        if re.search(r"\b(supersed(?:es|ed|ing)?|in\s+supersession\s+of|replaces?|repeals?)\b", ctx):
+            return "SUPERSEDES"
+        if re.search(r"\b(clarif(?:ies|ication|ied)|is\s+clarified)\b", ctx):
+            return "CLARIFIES"
+        if re.search(r"\b(partial\s+modification|modifi(?:es|ed|cation))\b", ctx):
+            return "MODIFIES"
+        if re.search(r"\b(amend(?:s|ed|ment)?|substitut(?:es|ed)|stands?\s+deleted|are\s+deleted|revis(?:es|ed))\b", ctx):
+            return "AMENDS"
+        return "REFERENCES"
+
     def _detect_regex_references(self, source_doc_id: str, text: str) -> List[DocumentReference]:
         """Detect standard circular reference patterns using robust regular expressions."""
         refs: List[DocumentReference] = []
         seen_refs = set()
 
-        # Check if text context implies an amendment or deletion
-        is_amendment = bool(
-            re.search(
-                r"\b(amend|partial\s+modification|substituted|stands?\s+deleted|are\s+deleted|clarification\s+to|revised)\b",
-                text,
-                re.IGNORECASE,
-            )
-        )
+        doc_level_type = self._detect_ref_type(text[:1500])
 
         # 1. Match explicit standard NSE references: NSE/COMP/50957, NSE / COMP / 50957, NSE/COMP50957, NSE/INSP/74836
         nse_matches = re.finditer(
@@ -149,9 +153,9 @@ class ReferenceDetector:
             if norm_match and norm_match not in seen_refs:
                 seen_refs.add(norm_match)
 
-                # Look around match for associated date (e.g. "dated January 07, 2022")
-                start_pos = max(0, m.start() - 50)
-                end_pos = min(len(text), m.end() + 100)
+                # Look around match for associated date and local context (e.g. "dated January 07, 2022")
+                start_pos = max(0, m.start() - 100)
+                end_pos = min(len(text), m.end() + 150)
                 window = text[start_pos:end_pos]
 
                 date_match = re.search(
@@ -160,18 +164,52 @@ class ReferenceDetector:
                     re.IGNORECASE,
                 )
                 iso_date = parse_date_to_iso(date_match.group(1)) if date_match else None
+                local_type = self._detect_ref_type(window)
+                ref_type = local_type if local_type != "REFERENCES" else doc_level_type
 
                 ref = DocumentReference(
                     source_document_id=source_doc_id,
                     target_reference_number=norm_match,
                     target_date=iso_date,
                     reference_text=window.strip(),
-                    reference_type="AMENDS" if is_amendment else "REFERENCES",
+                    reference_type=ref_type,
                     confidence=1.0,
                 )
                 refs.append(ref)
 
-        # 2. Match generic circular reference syntax: "Circular Ref No: 02/2022", "Circular No. 15/2026"
+        # 2. Match SEBI/CIR/RBI/BSE references: e.g. SEBI/HO/OIAE/OIAE_IAD-1/P/CIR/2023/131, CIR/MIRSD/11/2013
+        sebi_matches = re.finditer(
+            r"\b((?:SEBI|RBI|BSE|CIR)\s*/\s*[A-Za-z0-9_\-\/]+/[0-9]{1,5})\b",
+            text,
+            re.IGNORECASE,
+        )
+        for m in sebi_matches:
+            raw_match = m.group(1).strip()
+            norm_match = normalize_reference_number(raw_match)
+            if norm_match and norm_match not in seen_refs and not norm_match.startswith("CIRCULAR/"):
+                seen_refs.add(norm_match)
+                start_pos = max(0, m.start() - 100)
+                end_pos = min(len(text), m.end() + 150)
+                window = text[start_pos:end_pos]
+                date_match = re.search(
+                    r"dated\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}[-/]\d{1,2}[-/]\d{4})",
+                    window,
+                    re.IGNORECASE,
+                )
+                iso_date = parse_date_to_iso(date_match.group(1)) if date_match else None
+                local_type = self._detect_ref_type(window)
+                ref_type = local_type if local_type != "REFERENCES" else doc_level_type
+                ref = DocumentReference(
+                    source_document_id=source_doc_id,
+                    target_reference_number=norm_match,
+                    target_date=iso_date,
+                    reference_text=window.strip(),
+                    reference_type=ref_type,
+                    confidence=1.0,
+                )
+                refs.append(ref)
+
+        # 3. Match generic circular reference syntax: "Circular Ref No: 02/2022", "Circular No. 15/2026"
         circ_matches = re.finditer(
             r"(?:circular|ref\.?\s*no\.?|reference\s+to|vide\s+circular)\s+(?:no\.?\s*)?([0-9]{1,4}\s*/\s*20[0-9]{2})\b(?:\s+dated\s+([A-Za-z0-9\s,]+?))?",
             text,
@@ -184,14 +222,47 @@ class ReferenceDetector:
 
             if circ_num and circ_num not in seen_refs:
                 seen_refs.add(circ_num)
+                start_pos = max(0, m.start() - 100)
+                end_pos = min(len(text), m.end() + 150)
+                window = text[start_pos:end_pos]
+                local_type = self._detect_ref_type(window)
+                ref_type = local_type if local_type != "REFERENCES" else doc_level_type
+
                 ref = DocumentReference(
                     source_document_id=source_doc_id,
                     target_circular_number=circ_num,
                     target_date=iso_date,
-                    reference_text=m.group(0).strip(),
-                    reference_type="AMENDS" if is_amendment else "REFERENCES",
+                    reference_text=window.strip(),
+                    reference_type=ref_type,
                     confidence=1.0,
                 )
                 refs.append(ref)
 
+        # 4. Match Date-based circular citations: "Circular dated July 31, 2023"
+        date_ref_matches = re.finditer(
+            r"(?:circular|amendment|corrigendum)\s+(?:dated|of)\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}[-/]\d{1,2}[-/]\d{4})",
+            text,
+            re.IGNORECASE,
+        )
+        for m in date_ref_matches:
+            raw_date = m.group(1).strip()
+            iso_date = parse_date_to_iso(raw_date)
+            date_key = f"date_{iso_date}"
+            if iso_date and date_key not in seen_refs:
+                seen_refs.add(date_key)
+                start_pos = max(0, m.start() - 100)
+                end_pos = min(len(text), m.end() + 150)
+                window = text[start_pos:end_pos]
+                local_type = self._detect_ref_type(window)
+                ref_type = local_type if local_type != "REFERENCES" else doc_level_type
+                ref = DocumentReference(
+                    source_document_id=source_doc_id,
+                    target_date=iso_date,
+                    reference_text=window.strip(),
+                    reference_type=ref_type,
+                    confidence=0.9,
+                )
+                refs.append(ref)
+
         return refs
+

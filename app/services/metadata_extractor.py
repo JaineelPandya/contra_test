@@ -131,12 +131,13 @@ class MetadataExtractor:
             if m:
                 department = m.group(1).upper()
 
-        # Reference number: e.g. NSE/COMP/50957, SEBI/HO/MIRSD/...
-        ref_match = re.search(r"((?:NSE|SEBI|RBI|BSE|CIR)[A-Za-z0-9_\-\/]+)", text)
-        if ref_match:
-            cand = ref_match.group(1).strip(" /-,.\n")
-            if "/" in cand and len(cand) >= 6:
-                reference_number = cand
+        # Reference number: e.g. NSE/COMP/50957, SEBI/HO/..., HO/24/...
+        ref_candidates = re.findall(r"\b((?:NSE|SEBI|RBI|BSE|CIR|HO)[A-Za-z0-9_\-\/\(\)]+)", text, re.IGNORECASE)
+        for cand in ref_candidates:
+            cand_clean = cand.strip(" /-,.\n")
+            if "/" in cand_clean and len(cand_clean) >= 6 and not cand_clean.upper().startswith("CIRCULAR/"):
+                reference_number = cand_clean
+                break
 
         # Download / Circular Ref No: e.g. "Download Ref No: NSE/COMP/50957" or "Circular Ref. No: 02/2022"
         cir_ref_match = re.search(
@@ -147,14 +148,23 @@ class MetadataExtractor:
         if cir_ref_match:
             circular_number = cir_ref_match.group(1).strip()
 
-        # Date detection
-        date_match = re.search(
-            r"Date\s*:\s*([A-Za-z0-9\s,\-\/]+?)(?:\n|To|All|Sub)",
+        # Date detection: Prioritize "Last updated on" for Master Circular revisions
+        updated_match = re.search(
+            r"(?:Last\s+updated\s+on|Updated\s+on)\s*:\s*([A-Za-z0-9\s,\-\/]+?)(?:\n|To|All|Sub)",
             text,
             re.IGNORECASE,
         )
-        if date_match:
-            document_date = parse_date_to_iso(date_match.group(1))
+        if updated_match:
+            document_date = parse_date_to_iso(updated_match.group(1))
+
+        if not document_date:
+            date_match = re.search(
+                r"Date\s*:\s*([A-Za-z0-9\s,\-\/]+?)(?:\n|To|All|Sub)",
+                text,
+                re.IGNORECASE,
+            )
+            if date_match:
+                document_date = parse_date_to_iso(date_match.group(1))
 
         if not document_date:
             # Try searching for any standard date pattern in header

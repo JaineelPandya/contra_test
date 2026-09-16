@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RegGraph — Regulatory Knowledge Graph Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="/static/dashboard.css?v=2">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Top Navigation Header with Integrated Prominent Navigation Tabs -->
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-logo">
+                    <span class="logo-icon">⚖️</span>
+                </div>
+                <div class="brand-text">
+                    <h1>RegGraph</h1>
+                    <p class="tagline">Knowledge Graph & Temporal Query Engine</p>
+                </div>
+            </div>
+
+            <!-- Central Prominent Tab Switcher -->
+            <nav class="nav-pill-switcher">
+                <button class="nav-pill active" id="tab-btn-qa" data-view="view-qa">
+                    <span class="pill-icon">🔍</span>
+                    <span class="pill-title">1. Regulatory Q&A & Graph</span>
+                </button>
+                <button class="nav-pill" id="tab-btn-circulars" data-view="view-circulars">
+                    <span class="pill-icon">📁</span>
+                    <span class="pill-title">2. Ingested Circulars & Deletion</span>
+                    <span class="pill-badge" id="circulars-count-badge">0</span>
+                </button>
+            </nav>
+
+            <div class="header-actions">
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-label">Neo4j Connected</span>
+                </div>
+                <button id="btn-upload-modal" class="btn btn-primary">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    Upload Circular PDF
+                </button>
+            </div>
+        </header>
+
+        <!-- Toast Notification Container -->
+        <div id="toast-container" class="toast-container"></div>
+
+        <!-- ==================== TAB 1: REGULATORY Q&A & GRAPH ==================== -->
+        <div id="view-qa" class="tab-view active">
+            <!-- Main Query Hero Section -->
+            <section class="query-hero-section">
+                <div class="query-card glass-panel">
+                    <div class="query-input-wrapper">
+                        <div class="search-icon">🔍</div>
+                        <input type="text" id="query-input" placeholder="Ask any regulatory question (e.g. 'How did client margin reporting requirements change between 2022 and 2026?')" autofocus>
+                        <button id="btn-execute-query" class="btn btn-glow">
+                            <span>Analyze & Query Graph</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                        </button>
+                    </div>
+
+                    <!-- Query Archetype Selectors -->
+                    <div class="archetype-bar">
+                        <span class="filter-label">Query Archetype:</span>
+                        <div class="archetype-chips" id="archetype-chips">
+                            <button class="chip active" data-type="AUTO">✨ Auto-Detect</button>
+                            <button class="chip" data-type="CURRENT">🟢 Current Active</button>
+                            <button class="chip" data-type="HISTORICAL">🕰️ Historical Point-in-Time</button>
+                            <button class="chip" data-type="EVOLUTION">🔄 Rule Evolution</button>
+                            <button class="chip" data-type="AMENDMENT">⚡ Amendment Delta</button>
+                            <button class="chip" data-type="MASTER_TO_LATEST">📜 Master → Latest</button>
+                        </div>
+                    </div>
+
+                    <!-- Sample Question Quick-Pills -->
+                    <div class="sample-queries">
+                        <span class="sample-label">Try sample:</span>
+                        <div class="sample-pills" id="sample-pills">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Loading State Spinner -->
+            <div id="query-loader" class="loader-container hidden">
+                <div class="pulse-ring"></div>
+                <div class="loading-text">Analyzing Query → Planning Graph Traversal → Generating Cypher → Extracting Lineage...</div>
+            </div>
+
+            <!-- Query Execution Plan & Cypher Drawer (Collapsible) -->
+            <div id="plan-banner" class="plan-banner glass-panel hidden">
+                <div class="plan-header" id="toggle-plan">
+                    <div class="plan-badge-group">
+                        <span class="badge badge-accent" id="plan-type">CURRENT</span>
+                        <span class="plan-reasoning" id="plan-reasoning">Query analyzed successfully.</span>
+                    </div>
+                    <button class="btn-text">
+                        <span id="plan-toggle-label">View Generated Cypher</span>
+                        <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                </div>
+                <div class="plan-body hidden" id="plan-body">
+                    <div class="cypher-block">
+                        <div class="code-header">
+                            <span>Parameterized Cypher Query (Read-Only Guardrailed)</span>
+                            <button id="btn-copy-cypher" class="btn btn-tiny">Copy</button>
+                        </div>
+                        <pre><code id="cypher-code" class="language-cypher"></code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3-Part Regulatory Results Dashboard -->
+            <main class="dashboard-grid hidden" id="results-dashboard">
+                <!-- Left Column: Synthesized Regulatory Answer & Cards -->
+                <div class="results-left-column">
+                    <!-- Part 1: Current Regulation Summary Card -->
+                    <div class="card glass-panel" id="card-current-reg">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <span class="header-icon">🟢</span>
+                                <h3>1. Current Active Regulation</h3>
+                            </div>
+                            <span class="badge badge-success" id="current-badge">ACTIVE</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="current-summary-text" id="current-summary">Loading active state...</p>
+                            <div class="meta-grid" id="current-meta">
+                                <div class="meta-item">
+                                    <span class="meta-label">Governing Circular:</span>
+                                    <span class="meta-value" id="current-circular">—</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Effective Date:</span>
+                                    <span class="meta-value" id="current-effective-date">—</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Applicable Entities:</span>
+                                    <span class="meta-value" id="current-entities">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Part 2: Regulatory Change History & Timeline -->
+                    <div class="card glass-panel" id="card-changes">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <span class="header-icon">⏳</span>
+                                <h3>2. How It Changed (Chronological Delta)</h3>
+                            </div>
+                            <span class="badge badge-neutral" id="changes-count">0 Changes</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="timeline-container" id="timeline-list">
+                                <!-- Populated dynamically with change events -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Synthesized Legal Summary & Citations -->
+                    <div class="card glass-panel" id="card-synthesis">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <span class="header-icon">📑</span>
+                                <h3>Detailed Regulatory Summary & Verbatim Citations</h3>
+                            </div>
+                        </div>
+                        <div class="card-body markdown-content" id="synthesis-text">
+                            <!-- Markdown text rendered dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Interactive Lineage & Evolution Graph -->
+                <div class="results-right-column">
+                    <div class="card glass-panel graph-card">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <span class="header-icon">🕸️</span>
+                                <h3>3. Original → Latest Evolution Subgraph</h3>
+                            </div>
+                            <div class="graph-toolbar">
+                                <button id="btn-fit-graph" class="btn btn-tiny" title="Fit to Screen">Fit</button>
+                                <button id="btn-relayout-graph" class="btn btn-tiny" title="Rearrange Layout">Reset Layout</button>
+                                <span class="node-count-badge" id="graph-stats">0 nodes, 0 edges</span>
+                            </div>
+                        </div>
+                        <div class="graph-legend">
+                            <span class="legend-item"><span class="dot doc-dot"></span> Circular Document</span>
+                            <span class="legend-item"><span class="dot active-dot"></span> Active Fact</span>
+                            <span class="legend-item"><span class="dot modified-dot"></span> Modified / Deleted</span>
+                            <span class="legend-item"><span class="dot entity-dot"></span> Regulated Entity</span>
+                            <span class="legend-item"><span class="dot change-dot"></span> Change Event</span>
+                        </div>
+                        <div class="cytoscape-container" id="cy-canvas"></div>
+
+                        <!-- Selected Node Inspector Modal / Drawer -->
+                        <div class="node-inspector glass-panel hidden" id="node-inspector">
+                            <div class="inspector-header">
+                                <h4 id="inspector-title">Node Details</h4>
+                                <button id="btn-close-inspector" class="btn-close">&times;</button>
+                            </div>
+                            <div class="inspector-body" id="inspector-body">
+                                <!-- Populated on node click -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- ==================== TAB 2: INGESTED CIRCULARS & DELETION ==================== -->
+        <div id="view-circulars" class="tab-view hidden">
+            <section class="circulars-section">
+                <!-- Circulars Toolbar -->
+                <div class="circulars-toolbar glass-panel">
+                    <div class="circulars-search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="circular-search-input" placeholder="Filter circulars by reference number, title, date, or filename...">
+                    </div>
+                    <div class="circulars-filter-group">
+                        <select id="circular-status-filter" class="select-filter">
+                            <option value="ALL">All Statuses</option>
+                            <option value="COMPLETED">Completed</option>
+                            <option value="PROCESSING">Processing</option>
+                            <option value="FAILED">Failed</option>
+                        </select>
+                        <button id="btn-refresh-circulars" class="btn btn-secondary">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                            Refresh
+                        </button>
+                        <button id="btn-upload-from-circulars" class="btn btn-primary">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Upload Circular
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Circulars Loading Spinner -->
+                <div id="circulars-loading" class="loader-container hidden">
+                    <div class="pulse-ring"></div>
+                    <div class="loading-text">Loading Ingested Regulatory Circulars...</div>
+                </div>
+
+                <!-- Circulars Cards Grid -->
+                <div id="circulars-container" class="circulars-grid">
+                    <!-- Populated dynamically -->
+                </div>
+
+                <!-- Empty State -->
+                <div id="circulars-empty" class="empty-state glass-panel hidden">
+                    <div class="empty-icon">📭</div>
+                    <h3>No Regulatory Circulars Ingested Yet</h3>
+                    <p>No circulars are currently stored in your Neo4j knowledge graph. Click below to ingest your first circular PDF.</p>
+                    <button class="btn btn-primary btn-open-upload-modal-trigger" style="margin-top: 14px;">
+                        Upload First Circular PDF
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <!-- ==================== MODALS ==================== -->
+
+        <!-- Upload PDF Modal -->
+        <div id="upload-modal" class="modal-backdrop hidden">
+            <div class="modal-dialog glass-panel">
+                <div class="modal-header">
+                    <h3>Upload Regulatory Circular (PDF)</h3>
+                    <button class="btn-close btn-close-upload-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-desc">Upload NSE, SEBI, or RBI regulatory circulars. The system will automatically extract sections, build hierarchical chunks, identify atomic facts, detect cross-references, and track temporal amendments in Neo4j.</p>
+                    <div class="drop-zone" id="drop-zone">
+                        <div class="drop-icon">📁</div>
+                        <p class="drop-prompt">Drag & Drop Circular PDF here or <strong>Browse</strong></p>
+                        <input type="file" id="pdf-file-input" accept="application/pdf" class="file-input">
+                    </div>
+                    <div id="upload-status-box" class="upload-status hidden">
+                        <div class="upload-progress-text" id="upload-progress-text">Uploading...</div>
+                        <div class="progress-bar-bg"><div class="progress-bar-fill" id="upload-progress-bar"></div></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="btn-cancel-upload" class="btn btn-secondary">Cancel</button>
+                    <button id="btn-submit-upload" class="btn btn-primary" disabled>Start Ingestion Pipeline</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Confirmation Modal -->
+        <div id="delete-modal" class="modal-backdrop hidden">
+            <div class="modal-dialog glass-panel delete-dialog">
+                <div class="modal-header">
+                    <div class="dialog-danger-title">
+                        <span class="danger-icon">⚠️</span>
+                        <h3>Delete Circular from Knowledge Graph?</h3>
+                    </div>
+                    <button id="btn-close-delete-modal" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-desc">
+                        Are you sure you want to permanently delete circular <strong id="delete-target-ref" class="text-highlight">—</strong>?
+                    </p>
+                    <div class="delete-warning-box">
+                        <strong>⚠️ Neo4j Graph Deletion Scope:</strong>
+                        <ul>
+                            <li>The Document node and all associated Hierarchy Nodes (Sections, Clauses, FAQs) will be removed.</li>
+                            <li>All Chunks and NEXT/PREVIOUS sequential provenance links will be detached.</li>
+                            <li>All extracted atomic Facts, SUPPORTED_BY links, and temporal ChangeEvents will be permanently deleted.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="btn-cancel-delete" class="btn btn-secondary">Cancel</button>
+                    <button id="btn-confirm-delete" class="btn btn-danger">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        Yes, Delete from Graph
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/dashboard.js?v=2"></script>
+</body>
+</html>

@@ -10,6 +10,7 @@ class Chunk(BaseModel):
     document_id: str
     content: str
     heading_path: List[str] = Field(default_factory=list)
+    path: Optional[str] = None
     parent_id: Optional[str] = None
     previous_chunk_id: Optional[str] = None
     next_chunk_id: Optional[str] = None
@@ -17,3 +18,10 @@ class Chunk(BaseModel):
     page_end: int = 1
     order: int = 1
     token_count: int = 0
+
+    def model_post_init(self, __context: object) -> None:
+        if not self.path and self.heading_path:
+            self.path = " > ".join(self.heading_path)
+        elif not self.path:
+            self.path = ""
+

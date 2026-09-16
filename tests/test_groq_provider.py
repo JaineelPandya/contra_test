@@ -143,7 +143,7 @@ async def test_groq_429_short_wait_retries_and_succeeds() -> None:
         "choices": [
             {
                 "message": {
-                    "content": '{"facts": [{"subject": "Member", "predicate": "REQUIRES", "object": "Maintain books", "confidence": 0.95, "chunk_id": "chk-1"}]}'
+                    "content": '{"facts": [{"subject": "Member", "predicate": "REQUIRES", "object": "Maintain books", "confidence": 0.95, "evidence": "Trading members must maintain books.", "chunk_id": "chk-1"}]}'
                 }
             }
         ]
@@ -187,7 +187,7 @@ async def test_groq_429_long_wait_splits_batch_without_blocking() -> None:
             "choices": [
                 {
                     "message": {
-                        "content": f'{{"facts": [{{"subject": "{subj}", "predicate": "REQUIRES", "object": "Task", "confidence": 0.95, "chunk_id": "{cid}"}}]}}'
+                        "content": f'{{"facts": [{{"subject": "{subj}", "predicate": "REQUIRES", "object": "Task", "confidence": 0.95, "evidence": "Chunk {cid[-1]}", "chunk_id": "{cid}"}}]}}'
                     }
                 }
             ]
@@ -203,6 +203,7 @@ async def test_groq_429_long_wait_splits_batch_without_blocking() -> None:
 
     async def mock_sleep(seconds: float) -> None:
         sleep_calls.append(seconds)
+        provider.tpm_tracker._usage_history.clear()
 
     # Batch [A, B, C] gets 429 (1100s) -> should NOT sleep 1100s -> splits into [A] and [B, C] which succeed
     with patch("httpx.AsyncClient.post", side_effect=[error_429, make_200_resp("c-A", "A"), make_200_resp("c-B", "B")]) as mock_post, \
@@ -214,7 +215,7 @@ async def test_groq_429_long_wait_splits_batch_without_blocking() -> None:
         assert len(facts) == 2
         # Verify worker did NOT sleep for 1100s
         for s in sleep_calls:
-            assert s < 60.0
+            assert s <= 65.0
 
 
 @pytest.mark.asyncio
@@ -241,6 +242,7 @@ async def test_groq_429_long_wait_single_chunk_defers_to_fallback() -> None:
 
     async def mock_sleep(seconds: float) -> None:
         sleep_calls.append(seconds)
+        provider.tpm_tracker._usage_history.clear()
 
     with patch("httpx.AsyncClient.post", side_effect=error_429), \
          patch("asyncio.sleep", side_effect=mock_sleep):
@@ -251,14 +253,14 @@ async def test_groq_429_long_wait_single_chunk_defers_to_fallback() -> None:
             on_dead_letter=lambda c, err, p: dead_letter_calls.append((c, err, p)),
         )
 
-        # Should immediately use rule-based fallback without sleeping 300 seconds
-        assert len(facts) >= 1
-        assert facts[0].extraction_method == "rule_based"
+        # Accuracy-first: should record dead-letter with EXTRACTION_FAILED and NOT use rule-based fallback
+        assert len(facts) == 0
         assert len(dead_letter_calls) == 1
         assert dead_letter_calls[0][0] == 429
-        assert dead_letter_calls[0][2]["fallback_used"] is True
+        assert dead_letter_calls[0][2]["status"] == "EXTRACTION_FAILED"
+        assert dead_letter_calls[0][2]["fallback_used"] is False
         for s in sleep_calls:
-            assert s < 60.0
+            assert s <= 305.0
 
 
 @pytest.mark.asyncio
@@ -301,7 +303,7 @@ async def test_adaptive_batch_splitting_on_400() -> None:
             "choices": [
                 {
                     "message": {
-                        "content": f'{{"facts": [{{"subject": "{subj}", "predicate": "REQUIRES", "object": "Do duty", "confidence": 0.95, "chunk_id": "{cid}"}}]}}'
+                        "content": f'{{"facts": [{{"subject": "{subj}", "predicate": "REQUIRES", "object": "Do duty", "confidence": 0.95, "evidence": "Content of chunk {cid[-1]}", "chunk_id": "{cid}"}}]}}'
                     }
                 }
             ]
@@ -313,7 +315,11 @@ async def test_adaptive_batch_splitting_on_400() -> None:
     chunk_b = Chunk(chunk_id="chk-B", document_id="doc-split", content="Content of chunk B", token_count=10)
     chunk_c = Chunk(chunk_id="chk-C", document_id="doc-split", content="Content of chunk C", token_count=10)
 
-    with patch("httpx.AsyncClient.post", side_effect=[error_400, make_200_resp("chk-A", "Entity A"), make_200_resp("chk-B", "Entity B")]) as mock_post:
+    async def mock_sleep(seconds: float) -> None:
+        provider.tpm_tracker._usage_history.clear()
+
+    with patch("httpx.AsyncClient.post", side_effect=[error_400, make_200_resp("chk-A", "Entity A"), make_200_resp("chk-B", "Entity B")]) as mock_post, \
+         patch("asyncio.sleep", side_effect=mock_sleep):
         facts = await provider.extract_facts_batch("doc-split", [chunk_a, chunk_b, chunk_c])
 
         assert mock_post.call_count == 3
@@ -363,7 +369,9 @@ def test_groq_model_configuration() -> None:
     assert provider.tpm_limit == 8000
     assert provider.tpm_tracker.get_safety_limit() == 7200  # 90% of 8000
     assert provider.max_input_tokens == 4000
-    assert provider.reserved_output_tokens == 600
+    assert provider.reserved_output_tokens == 1200
     assert provider.max_rate_limit_retries == 3
-    assert provider.max_retry_wait_seconds == 60.0
+    assert provider.max_retry_wait_seconds == 300.0
     assert provider.rate_limit_safety_buffer == 2.0
+
+
