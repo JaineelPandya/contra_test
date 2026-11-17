@@ -1,0 +1,233 @@
+{
+  "run_id": "eval_20261009_055256_75dc93",
+  "timestamp": "2026-10-09T05:52:59.581021+00:00",
+  "model_name": "openai/gpt-oss-20b",
+  "provider_name": "groq",
+  "prompt_version_or_hash": "9c40b8c7f0bb0a06",
+  "dataset_path": "evaluation/data/gold_facts_seed.jsonl",
+  "total_gold_facts": 128,
+  "verified_gold_facts": 0,
+  "unverified_gold_facts": 128,
+  "evaluated_gold_facts": 128,
+  "total_predictions": 106,
+  "core_metrics": {
+    "true_positives": 19,
+    "false_positives": 87,
+    "false_negatives": 109,
+    "precision": 0.1792,
+    "recall": 0.1484,
+    "f1_score": 0.1624
+  },
+  "component_metrics": {
+    "subject_accuracy": 0.8971,
+    "predicate_accuracy": 1.0,
+    "object_accuracy": 0.6893,
+    "condition_preservation_rate": 0.0,
+    "exception_preservation_rate": 0.0,
+    "threshold_preservation_rate": 0.0,
+    "time_preservation_rate": 0.1053,
+    "evidence_support_rate": 1.0,
+    "duplicate_prediction_rate": 0.0566,
+    "clause_coverage": 0.172
+  },
+  "predicate_breakdown": [
+    {
+      "predicate": "AMENDS",
+      "gold_count": 1,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "precision": null,
+      "recall": 0.0,
+      "f1_score": null
+    },
+    {
+      "predicate": "APPLIES_TO",
+      "gold_count": 7,
+      "predicted_count": 3,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": null
+    },
+    {
+      "predicate": "AUTHORITY_BASIS",
+      "gold_count": 1,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "precision": null,
+      "recall": 0.0,
+      "f1_score": null
+    },
+    {
+      "predicate": "CLASSIFIED_AS",
+      "gold_count": 2,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "precision": null,
+      "recall": 0.0,
+      "f1_score": null
+    },
+    {
+      "predicate": "CREDITED_TO",
+      "gold_count": 0,
+      "predicted_count": 2,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "DEFINES",
+      "gold_count": 3,
+      "predicted_count": 5,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": null
+    },
+    {
+      "predicate": "DELETES",
+      "gold_count": 0,
+      "predicted_count": 1,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "DETERMINES_BY",
+      "gold_count": 1,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "precision": null,
+      "recall": 0.0,
+      "f1_score": null
+    },
+    {
+      "predicate": "EXCEPTION_TO",
+      "gold_count": 10,
+      "predicted_count": 8,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": null
+    },
+    {
+      "predicate": "EXTENDS",
+      "gold_count": 0,
+      "predicted_count": 1,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "PAYMENT_DEADLINE",
+      "gold_count": 0,
+      "predicted_count": 2,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "PERMITS",
+      "gold_count": 4,
+      "predicted_count": 8,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": null
+    },
+    {
+      "predicate": "PRESERVES_EFFECT",
+      "gold_count": 3,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "precision": null,
+      "recall": 0.0,
+      "f1_score": null
+    },
+    {
+      "predicate": "PRESERVES_RIGHT",
+      "gold_count": 1,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "precision": null,
+      "recall": 0.0,
+      "f1_score": null
+    },
+    {
+      "predicate": "PROHIBITS",
+      "gold_count": 3,
+      "predicted_count": 6,
+      "matched_count": 1,
+      "precision": 0.1667,
+      "recall": 0.3333,
+      "f1_score": 0.2222
+    },
+    {
+      "predicate": "REFERENCES",
+      "gold_count": 0,
+      "predicted_count": 1,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "REQUIRES",
+      "gold_count": 91,
+      "predicted_count": 61,
+      "matched_count": 9,
+      "precision": 0.1475,
+      "recall": 0.0989,
+      "f1_score": 0.1184
+    },
+    {
+      "predicate": "RESCINDS",
+      "gold_count": 1,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "precision": null,
+      "recall": 0.0,
+      "f1_score": null
+    },
+    {
+      "predicate": "SUBJECT_TO",
+      "gold_count": 0,
+      "predicted_count": 6,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "SUBMITS_TO",
+      "gold_count": 0,
+      "predicted_count": 2,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    }
+  ],
+  "error_counts": {
+    "LOST_CONDITION": 19,
+    "LOST_OR_INCORRECT_THRESHOLD": 12,
+    "LOST_EXCEPTION": 9,
+    "LOST_OR_INCORRECT_DEADLINE": 17,
+    "AMBIGUOUS_MATCH": 48,
+    "UNSUPPORTED_OR_FABRICATED_FACT": 57,
+    "DUPLICATE_PREDICTION": 6,
+    "MISSING_OBLIGATION": 49,
+    "WRONG_OBJECT": 36
+  },
+  "regulatory_impact_counts": {
+    "MEDIUM": 55,
+    "HIGH": 135,
+    "CRITICAL": 9,
+    "LOW": 54
+  },
+  "is_verified_baseline": false
+}

@@ -27,7 +27,7 @@ from app.prompts.fact_extraction import (
 from app.prompts.change_detection import BATCH_RELATIONSHIP_SYSTEM_PROMPT, BATCH_RELATIONSHIP_USER_PROMPT
 from app.prompts.reference_detection import REFERENCE_DETECTION_SYSTEM_PROMPT, REFERENCE_DETECTION_USER_PROMPT
 from app.services.qualifier_extractor import extract_qualifier_spans
-
+from app.services.chunker import approximate_token_count
 
 class GroqRateLimitLongWaitError(Exception):
     """Raised when Groq returns HTTP 429 with a retry_after exceeding the allowed max wait."""
@@ -546,8 +546,13 @@ class GroqProvider(BaseLLMProvider):
             return FactPredicate.SUBMITS_TO, "MANDATORY"
         elif re.search(r"\b(reports?\s+to|disclos\w*\s+to)\b", clean_pred, re.IGNORECASE):
             return FactPredicate.REPORTS_TO, "MANDATORY"
-        elif re.search(r"\b(maintains?|preserve\w*|keep\w*)\b", clean_pred, re.IGNORECASE):
-            return FactPredicate.MAINTAINS, "MANDATORY"
+        elif re.search(
+            r"\b(directed\s+to|instructed\s+to|required\s+to|"
+            r"mandated\s+to|ordered\s+to|obligated\s+to)\b",
+            clean_pred,
+            re.IGNORECASE,
+        ):
+            return FactPredicate.REQUIRES, "MANDATORY"
         elif re.search(r"\b(implements?|execute\w*)\b", clean_pred, re.IGNORECASE):
             return FactPredicate.IMPLEMENTS, "MANDATORY"
         elif re.search(r"\b(applies\s+to|applicable\s+to|govern\w*)\b", clean_pred, re.IGNORECASE):

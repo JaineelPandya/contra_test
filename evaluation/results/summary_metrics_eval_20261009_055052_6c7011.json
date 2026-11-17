@@ -1,0 +1,161 @@
+{
+  "run_id": "eval_20261009_055052_6c7011",
+  "timestamp": "2026-10-09T05:50:53.323599+00:00",
+  "model_name": "openai/gpt-oss-20b",
+  "provider_name": "groq",
+  "prompt_version_or_hash": "9c40b8c7f0bb0a06",
+  "dataset_path": "evaluation/data/gold_facts_seed.jsonl",
+  "total_gold_facts": 128,
+  "verified_gold_facts": 0,
+  "unverified_gold_facts": 128,
+  "evaluated_gold_facts": 0,
+  "total_predictions": 106,
+  "core_metrics": {
+    "true_positives": 0,
+    "false_positives": 106,
+    "false_negatives": 0,
+    "precision": 0.0,
+    "recall": null,
+    "f1_score": null
+  },
+  "component_metrics": {
+    "subject_accuracy": null,
+    "predicate_accuracy": null,
+    "object_accuracy": null,
+    "condition_preservation_rate": null,
+    "exception_preservation_rate": null,
+    "threshold_preservation_rate": null,
+    "time_preservation_rate": null,
+    "evidence_support_rate": 1.0,
+    "duplicate_prediction_rate": 0.0849,
+    "clause_coverage": null
+  },
+  "predicate_breakdown": [
+    {
+      "predicate": "FACTPREDICATE.APPLIES_TO",
+      "gold_count": 0,
+      "predicted_count": 3,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.CREDITED_TO",
+      "gold_count": 0,
+      "predicted_count": 2,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.DEFINES",
+      "gold_count": 0,
+      "predicted_count": 5,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.DELETES",
+      "gold_count": 0,
+      "predicted_count": 1,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.EXCEPTION_TO",
+      "gold_count": 0,
+      "predicted_count": 8,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.EXTENDS",
+      "gold_count": 0,
+      "predicted_count": 1,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.PAYMENT_DEADLINE",
+      "gold_count": 0,
+      "predicted_count": 2,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.PERMITS",
+      "gold_count": 0,
+      "predicted_count": 8,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.PROHIBITS",
+      "gold_count": 0,
+      "predicted_count": 6,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.REFERENCES",
+      "gold_count": 0,
+      "predicted_count": 1,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.REQUIRES",
+      "gold_count": 0,
+      "predicted_count": 61,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.SUBJECT_TO",
+      "gold_count": 0,
+      "predicted_count": 6,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    },
+    {
+      "predicate": "FACTPREDICATE.SUBMITS_TO",
+      "gold_count": 0,
+      "predicted_count": 2,
+      "matched_count": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1_score": null
+    }
+  ],
+  "error_counts": {
+    "UNSUPPORTED_OR_FABRICATED_FACT": 97,
+    "DUPLICATE_PREDICTION": 9
+  },
+  "regulatory_impact_counts": {
+    "HIGH": 97,
+    "LOW": 9
+  },
+  "is_verified_baseline": false
+}

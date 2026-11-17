@@ -1,0 +1,58 @@
+gold_fact_id,predicted_fact_id,component_type,gold_value,predicted_value,score,error_category,regulatory_impact
+SEBI-SURV-075,57c39e87-295e-442f-8ebf-bdc1e13583d7,CONDITION,Use the format in Annexure 6,,0.0,LOST_CONDITION,MEDIUM
+SEBI-SURV-075,57c39e87-295e-442f-8ebf-bdc1e13583d7,THRESHOLD,Quarterly reporting,,0.0,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-049,4fef5971-e9bf-499a-990d-baab19a34f65,CONDITION,Error is minor and self-corrected,"if required, detailed analysis / examination and; if imposed; subject to appropriate proceedings under the; subject",0.3239,LOST_CONDITION,MEDIUM
+SEBI-SURV-049,4fef5971-e9bf-499a-990d-baab19a34f65,EXCEPTION,SEBI may consider minor lapses for administrative proceedings,,0.0,LOST_EXCEPTION,CRITICAL
+SEBI-SURV-049,4fef5971-e9bf-499a-990d-baab19a34f65,TIME,When corrected on own initiative,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-040,288f85c3-c4e2-4dc2-bbad-486d440a4fa0,CONDITION,Submissions made by concerned MII,"if required, detailed analysis / examination and; if imposed; subject to appropriate proceedings under the; subject",0.1965,LOST_CONDITION,MEDIUM
+SEBI-SURV-040,288f85c3-c4e2-4dc2-bbad-486d440a4fa0,TIME,Before imposing financial disincentive,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-050,51379de9-9a9a-4800-8749-bbbe7631bd0f,CONDITION,Extension sought is minor,"if required, detailed analysis / examination and; if imposed; subject to appropriate proceedings under the; subject",0.2388,LOST_CONDITION,MEDIUM
+SEBI-SURV-050,51379de9-9a9a-4800-8749-bbbe7631bd0f,EXCEPTION,SEBI may consider minor lapses for administrative proceedings,,0.0,LOST_EXCEPTION,CRITICAL
+SEBI-SURV-050,51379de9-9a9a-4800-8749-bbbe7631bd0f,THRESHOLD,Minor; no exact threshold specified,,0.0,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-050,51379de9-9a9a-4800-8749-bbbe7631bd0f,TIME,As applicable,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-051,cc9fd924-de16-469f-9ec8-77cbf8d95ac3,CONDITION,Cause is beyond control of MII,"if required, detailed analysis / examination and; if imposed; subject to appropriate proceedings under the; subject",0.1765,LOST_CONDITION,MEDIUM
+SEBI-SURV-051,cc9fd924-de16-469f-9ec8-77cbf8d95ac3,EXCEPTION,SEBI may consider minor lapses for administrative proceedings,,0.0,LOST_EXCEPTION,CRITICAL
+SEBI-SURV-051,cc9fd924-de16-469f-9ec8-77cbf8d95ac3,TIME,As applicable,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-056,77503d30-ae27-457f-984b-98372bb29b1d,CONDITION,Counterparty is required to handle UPSI,where the concerned securities are,0.3288,LOST_CONDITION,MEDIUM
+SEBI-SURV-056,77503d30-ae27-457f-984b-98372bb29b1d,TIME,Ongoing,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-023,132dcf45-2eca-4aa4-bf9b-bcd88e1bca54,CONDITION,Decisions taken in surveillance meetings,"if required, detailed analysis / examination and; if imposed; subject to appropriate proceedings under the; subject",0.3221,LOST_CONDITION,MEDIUM
+SEBI-SURV-023,132dcf45-2eca-4aa4-bf9b-bcd88e1bca54,TIME,Promptly,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-045,1587812e-7aea-4363-bbf6-7018b05a01f7,CONDITION,Matter/instance caused losses to a large number of investors,"if required, detailed analysis / examination and; if imposed; subject to appropriate proceedings under the; subject",0.3314,LOST_CONDITION,MEDIUM
+SEBI-SURV-045,1587812e-7aea-4363-bbf6-7018b05a01f7,EXCEPTION,May be subject to appropriate proceedings under SCRA/SEBI Act/Depositories Act,,0.0,LOST_EXCEPTION,CRITICAL
+SEBI-SURV-045,1587812e-7aea-4363-bbf6-7018b05a01f7,THRESHOLD,Large number of investors; no numeric threshold specified,,0.0,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-045,1587812e-7aea-4363-bbf6-7018b05a01f7,TIME,Not applicable to FDSRL,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-007,4f2fca04-7daf-412d-ba16-c760903ad3f2,CONDITION,Applies in all cases covered by section 1.2,Where suspension of trading is being revoked after more than one year,0.1964,LOST_CONDITION,MEDIUM
+SEBI-SURV-007,4f2fca04-7daf-412d-ba16-c760903ad3f2,THRESHOLD,Before trading starts,,0.0,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-007,4f2fca04-7daf-412d-ba16-c760903ad3f2,TIME,Before commencement of trading,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-041,7b25bdbb-5d2b-4bff-b820-65016e1f1fff,CONDITION,Disincentive has been imposed under FDSRL,"if required, detailed analysis / examination and; if imposed; subject to appropriate proceedings under the; subject",0.3265,LOST_CONDITION,MEDIUM
+SEBI-SURV-041,7b25bdbb-5d2b-4bff-b820-65016e1f1fff,THRESHOLD,15 working days,,0.0,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-010,4eb6a91a-049f-4741-be07-23bb7c63b2ef,CONDITION,"Information may originate from clients, industry, trade or other sources","subject to; If an employee fails to do so, he/she",0.3419,LOST_CONDITION,MEDIUM
+SEBI-SURV-010,4eb6a91a-049f-4741-be07-23bb7c63b2ef,EXCEPTION,Circulation after verification is not prohibited by this clause,,0.0,LOST_EXCEPTION,CRITICAL
+SEBI-SURV-010,4eb6a91a-049f-4741-be07-23bb7c63b2ef,TIME,Ongoing conduct requirement,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-008,bec45339-feaf-4d71-af32-dcf67ebdf887,CONDITION,Disclosure requirements must be complied with before trading starts,Where suspension of trading is being revoked after more than one year,0.3382,LOST_CONDITION,MEDIUM
+SEBI-SURV-008,bec45339-feaf-4d71-af32-dcf67ebdf887,THRESHOLD,Before trading starts,,0.0,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-008,bec45339-feaf-4d71-af32-dcf67ebdf887,TIME,Before commencement of trading,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-063,ca010c27-9983-4dfe-b5e8-9c0435cc6b8a,CONDITION,Disclosures pertain to PIT Regulations,where the concerned securities are,0.3056,LOST_CONDITION,MEDIUM
+SEBI-SURV-063,ca010c27-9983-4dfe-b5e8-9c0435cc6b8a,EXCEPTION,Respective exchange websites,,0.0,LOST_EXCEPTION,CRITICAL
+SEBI-SURV-063,ca010c27-9983-4dfe-b5e8-9c0435cc6b8a,TIME,No specific deadline stated,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-044,1262a30a-e9b5-42f7-bc56-2ef6e44938d9,CONDITION,Matter/instance has market-wide impact,"if required, detailed analysis / examination and; if imposed; subject to appropriate proceedings under the; subject",0.1497,LOST_CONDITION,MEDIUM
+SEBI-SURV-044,1262a30a-e9b5-42f7-bc56-2ef6e44938d9,EXCEPTION,Such matter remains subject to appropriate proceedings under cited statutes,,0.0,LOST_EXCEPTION,CRITICAL
+SEBI-SURV-044,1262a30a-e9b5-42f7-bc56-2ef6e44938d9,THRESHOLD,Market-wide impact,total annual revenue,0.2105,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-044,1262a30a-e9b5-42f7-bc56-2ef6e44938d9,TIME,Not applicable to FDSRL,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-059,361b6dfa-fed1-4075-9fa4-74c878f508d1,CONDITION,Amount collected under Schedule B clause 12 or Schedule C clause 10 for CoC violations,where the concerned securities are,0.25,LOST_CONDITION,MEDIUM
+SEBI-SURV-059,361b6dfa-fed1-4075-9fa4-74c878f508d1,THRESHOLD,Amount collected under cited clauses,,0.0,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-059,361b6dfa-fed1-4075-9fa4-74c878f508d1,TIME,No specific deadline in this clause,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-048,0d4d272b-72e0-4733-826e-38e7746a760a,CONDITION,Error is minor and corrected in a short span,"if required, detailed analysis / examination and; if imposed; subject to appropriate proceedings under the; subject",0.3529,LOST_CONDITION,MEDIUM
+SEBI-SURV-048,0d4d272b-72e0-4733-826e-38e7746a760a,EXCEPTION,SEBI may consider minor lapses for administrative proceedings,,0.0,LOST_EXCEPTION,CRITICAL
+SEBI-SURV-048,0d4d272b-72e0-4733-826e-38e7746a760a,THRESHOLD,Short span; not numerically defined,,0.0,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-048,0d4d272b-72e0-4733-826e-38e7746a760a,TIME,Short span of time,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-035,b83a5815-05db-4889-9587-1c16469c1437,CONDITION,Second SRL instance in the financial year,if imposed under framework of FDSRL,0.3443,LOST_CONDITION,MEDIUM
+SEBI-SURV-035,b83a5815-05db-4889-9587-1c16469c1437,THRESHOLD,< ₹300 crore; second instance; ₹2 lakh,determined on the basis of total annual revenue of the MII,0.2149,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-035,b83a5815-05db-4889-9587-1c16469c1437,TIME,Per second instance in FY,within 15 working days,0.2553,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-047,beae21f4-a71d-49aa-a4d0-0903694b8f5d,CONDITION,Delay is 1–2 working days,"if required, detailed analysis / examination and; if imposed; subject to appropriate proceedings under the; subject",0.2687,LOST_CONDITION,MEDIUM
+SEBI-SURV-047,beae21f4-a71d-49aa-a4d0-0903694b8f5d,EXCEPTION,SEBI may consider minor lapses for administrative proceedings such as warnings,,0.0,LOST_EXCEPTION,CRITICAL
+SEBI-SURV-047,beae21f4-a71d-49aa-a4d0-0903694b8f5d,THRESHOLD,1–2 working days,,0.0,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-047,beae21f4-a71d-49aa-a4d0-0903694b8f5d,TIME,As applicable to the delay,,0.0,LOST_OR_INCORRECT_DEADLINE,HIGH
+SEBI-SURV-033,03471aa8-c8f0-428f-9b81-77eddb045dd1,CONDITION,Second SRL instance in the financial year,if imposed under framework of FDSRL,0.3443,LOST_CONDITION,MEDIUM
+SEBI-SURV-033,03471aa8-c8f0-428f-9b81-77eddb045dd1,THRESHOLD,"> ₹1,000 crore; second instance; ₹50 lakh",determined on the basis of total annual revenue of the MII,0.2258,LOST_OR_INCORRECT_THRESHOLD,HIGH
+SEBI-SURV-033,03471aa8-c8f0-428f-9b81-77eddb045dd1,TIME,Per second instance in FY,within 15 working days,0.2553,LOST_OR_INCORRECT_DEADLINE,HIGH
